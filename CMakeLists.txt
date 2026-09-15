@@ -59,6 +59,29 @@ target_compile_definitions(D2AccessLauncher PRIVATE
 target_include_directories(D2AccessLauncher PRIVATE src)
 target_link_libraries(D2AccessLauncher PRIVATE shlwapi)
 
+# Accessible helper for Blizzard's classic Diablo II installer.
+add_executable(D2AccessSetup
+    src/D2AccessSetup.cpp
+    src/EventLog.cpp
+    src/Logging.cpp
+    src/ScreenReader.cpp
+)
+
+if(MSVC)
+    target_compile_options(D2AccessSetup PRIVATE /utf-8)
+    target_link_options(D2AccessSetup PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'")
+endif()
+
+target_compile_definitions(D2AccessSetup PRIVATE
+    NOMINMAX
+    UNICODE
+    _UNICODE
+    WIN32_LEAN_AND_MEAN
+)
+
+target_include_directories(D2AccessSetup PRIVATE src)
+target_link_libraries(D2AccessSetup PRIVATE shlwapi ole32 sapi comdlg32)
+
 add_custom_command(TARGET D2AccessHook POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:D2AccessHook>/audio"
     COMMAND ${CMAKE_COMMAND} -E copy_directory

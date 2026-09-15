@@ -18,6 +18,8 @@ An accessibility mod for blind and low-vision players of classic Diablo II (Game
 
 ## Instalacja
 
+Grę Diablo II i dodatek Lord of Destruction kupisz w Battle.net. Instalator Blizzarda ma graficzne menu i niedostępną umowę licencyjną, dlatego w paczce jest asystent `D2AccessSetup.exe`, który przeprowadza przez instalację gry z czytnikiem ekranu. Szczegóły są w [instrukcji](docs/README_PL.md#instalacja-gry-diablo-ii).
+
 1. Pobierz paczkę `diablo-2-access-…-windows.zip` z zakładki [Releases](https://github.com/mojsior/diablo-2-access/releases).
 2. Rozpakuj ją do dowolnego folderu.
 3. Uruchom `D2AccessLauncher.exe`. Jeśli gra jest w innym miejscu, podaj ścieżkę: `D2AccessLauncher.exe "D:\Gry\Diablo II\Game.exe"`.
@@ -29,6 +31,8 @@ An accessibility mod for blind and low-vision players of classic Diablo II (Game
 - NVDA (optional; without NVDA the mod speaks with the Windows synthesizer).
 
 ## Installation
+
+Diablo II and Lord of Destruction are sold on Battle.net. Blizzard's installer has a graphical menu and an inaccessible licence agreement, so the package includes `D2AccessSetup.exe`, an assistant that guides screen reader users through installing the game. See the [user guide](docs/README_EN.md#installing-diablo-ii).
 
 1. Download `diablo-2-access-…-windows.zip` from [Releases](https://github.com/mojsior/diablo-2-access/releases).
 2. Extract it to any folder.
