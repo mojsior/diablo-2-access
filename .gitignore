@@ -1,0 +1,15 @@
+# Build output
+build/
+out/
+*.obj
+*.pdb
+*.ilk
+
+# Logs written next to the binaries
+*.log
+
+# Local backups of old sources (kept in git history instead)
+backup-*/
+
+# Release packages
+dist/
