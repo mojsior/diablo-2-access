@@ -18,11 +18,14 @@ An accessibility mod for blind and low-vision players of classic Diablo II (Game
 
 ## Instalacja
 
-Grę Diablo II i dodatek Lord of Destruction kupisz w Battle.net. Instalator Blizzarda ma graficzne menu i niedostępną umowę licencyjną, dlatego w paczce jest asystent `D2AccessSetup.exe`, który przeprowadza przez instalację gry z czytnikiem ekranu. Szczegóły są w [instrukcji](docs/README_PL.md#instalacja-gry-diablo-ii).
+Grę Diablo II i dodatek Lord of Destruction kupisz w Battle.net. Instalator Blizzarda ma graficzne menu i niedostępną umowę licencyjną, dlatego mod ma asystenta `D2AccessSetup.exe`. Szczegóły są w [instrukcji](docs/README_PL.md#instalacja-gry-diablo-ii).
 
-1. Pobierz paczkę `diablo-2-access-…-windows.zip` z zakładki [Releases](https://github.com/mojsior/diablo-2-access/releases).
-2. Rozpakuj ją do dowolnego folderu.
-3. Uruchom `D2AccessLauncher.exe`. Jeśli gra jest w innym miejscu, podaj ścieżkę: `D2AccessLauncher.exe "D:\Gry\Diablo II\Game.exe"`.
+1. Pobierz `D2AccessSetup.exe` z najnowszego wydania na stronie [Releases](https://github.com/mojsior/diablo-2-access/releases) i uruchom go.
+2. Asystent przeprowadzi Cię przez instalator gry, czytając jego okna. Klucz CD wpisujesz sam.
+3. Po instalacji gry asystent pobierze z GitHuba najnowszą wersję moda i zainstaluje ją w folderze gry. Gdy gra jest już zainstalowana, asystent od razu instaluje albo aktualizuje moda.
+4. Grę z modem uruchamiasz plikiem `D2AccessLauncher.exe` z folderu gry.
+
+Paczka `diablo-2-access-…-windows.zip` z tego samego wydania zawiera pliki moda do ręcznego rozpakowania do folderu gry.
 
 ## Requirements
 
@@ -32,11 +35,14 @@ Grę Diablo II i dodatek Lord of Destruction kupisz w Battle.net. Instalator Bli
 
 ## Installation
 
-Diablo II and Lord of Destruction are sold on Battle.net. Blizzard's installer has a graphical menu and an inaccessible licence agreement, so the package includes `D2AccessSetup.exe`, an assistant that guides screen reader users through installing the game. See the [user guide](docs/README_EN.md#installing-diablo-ii).
+Diablo II and Lord of Destruction are sold on Battle.net. Blizzard's installer has a graphical menu and an inaccessible licence agreement, so the mod has the assistant `D2AccessSetup.exe`. See the [user guide](docs/README_EN.md#installing-diablo-ii).
 
-1. Download `diablo-2-access-…-windows.zip` from [Releases](https://github.com/mojsior/diablo-2-access/releases).
-2. Extract it to any folder.
-3. Run `D2AccessLauncher.exe`. If the game is elsewhere, pass its path: `D2AccessLauncher.exe "D:\Games\Diablo II\Game.exe"`.
+1. Download `D2AccessSetup.exe` from the newest release on the [Releases](https://github.com/mojsior/diablo-2-access/releases) page and run it.
+2. The assistant guides you through the game installer, reading its windows aloud. You type the CD-key yourself.
+3. After the game is installed, the assistant downloads the newest mod release from GitHub and installs it into the game folder. When the game is already installed, it installs or updates the mod right away.
+4. Start the game with the mod using `D2AccessLauncher.exe` in the game folder.
+
+The `diablo-2-access-…-windows.zip` package of the same release holds the mod files for extracting into the game folder by hand.
 
 ## Build
 

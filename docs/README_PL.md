@@ -8,19 +8,25 @@ Mowa idzie przez NVDA. Gdy NVDA nie działa, mod używa syntezatora Windows (SAP
 
 Mod wymaga oryginalnego Diablo II z dodatkiem Lord of Destruction w wersji 1.14b. Obie części można kupić w sklepie Battle.net jako „Diablo II” i „Diablo II: Lord of Destruction”; to nie jest Diablo II: Resurrected. Po zakupie Blizzard udostępnia pobieracz, który ściąga instalator do folderu, np. `D2-1.14b-Installer-plPL` z plikami `Installer.exe` i `Installer Tome.mpq`.
 
-Instalator Blizzarda ma graficzne menu i okno umowy licencyjnej, którego nie da się zaakceptować samą klawiaturą. Dlatego mod zawiera asystenta instalacji `D2AccessSetup.exe`.
+Instalator Blizzarda ma graficzne menu i okno umowy licencyjnej, którego nie da się zaakceptować samą klawiaturą. Dlatego do moda jest asystent instalacji `D2AccessSetup.exe`. Przeprowadza on przez instalację gry, a potem sam pobiera i instaluje moda.
 
 ### Instalacja z asystentem
 
-1. Uruchom `D2AccessSetup.exe` z folderu moda. Jeśli Windows zapyta o uprawnienia administratora, zgódź się, bo instalator Blizzarda tego wymaga.
-2. Asystent sam szuka instalatora w folderach Pobrane i Pulpit. Gdy znajdzie kilka, poprosi o wybór cyfrą; gdy nie znajdzie żadnego, otworzy okno wyboru pliku, w którym wskazujesz `Installer.exe`. Ścieżkę można też podać jako parametr: `D2AccessSetup.exe "D:\Pobrane\D2-1.14b-Installer-plPL"`.
-3. Asystent uruchamia instalator i sam wybiera w graficznym menu instalację gry.
-4. Przy umowie licencyjnej asystent pyta: Enter akceptuje umowę, Escape ją odrzuca. Po akceptacji sam przewija umowę i naciska „Akceptuję”.
-5. Każde kolejne okno (klucz CD, wybór folderu, DirectX, komunikaty o błędach) asystent czyta na głos i przenosi na nie fokus. Klucz wpisujesz sam: najpierw imię właściciela, potem Tab i 26-znakowy klucz, na końcu Enter.
-6. Podczas kopiowania plików asystent co 10% podaje postęp, a na końcu mówi, że instalacja się zakończyła, i zamyka instalator.
-7. Tak samo zainstaluj potem dodatek Lord of Destruction jego własnym instalatorem.
+1. Pobierz plik `D2AccessSetup.exe` z najnowszego wydania na stronie [Releases](https://github.com/mojsior/diablo-2-access/releases). To jeden plik, nie trzeba go rozpakowywać.
+2. Uruchom `D2AccessSetup.exe`. Jeśli Windows zapyta o uprawnienia administratora, zgódź się, bo instalator Blizzarda i kopiowanie do folderu gry tego wymagają.
+3. Asystent sam szuka instalatora gry w folderach Pobrane i Pulpit. Gdy znajdzie kilka, poprosi o wybór cyfrą; gdy nie znajdzie żadnego, otworzy okno wyboru pliku, w którym wskazujesz `Installer.exe`. Ścieżkę można też podać jako parametr: `D2AccessSetup.exe "D:\Pobrane\D2-1.14b-Installer-plPL"`.
+4. Asystent uruchamia instalator i sam wybiera w graficznym menu instalację gry.
+5. Przy umowie licencyjnej asystent pyta: Enter akceptuje umowę, Escape ją odrzuca. Po akceptacji sam przewija umowę i naciska „Akceptuję”.
+6. Każde kolejne okno (klucz CD, wybór folderu, DirectX, komunikaty o błędach) asystent czyta na głos i przenosi na nie fokus. Klucz wpisujesz sam: najpierw imię właściciela, potem Tab i 26-znakowy klucz, na końcu Enter.
+7. Podczas kopiowania plików asystent co 10% podaje postęp, a na końcu mówi, że instalacja gry się zakończyła, i zamyka instalator.
+8. Asystent pyta, czy zainstalować moda. Po Enterze pobiera z GitHuba najnowsze wydanie Diablo 2 Access, rozpakowuje je i kopiuje do folderu, w którym zainstalowała się gra (zwykle `C:\Program Files (x86)\Diablo II`).
+9. Jeśli masz dodatek Lord of Destruction, uruchom asystenta jeszcze raz i wskaż instalator dodatku.
 
-Asystent sprawdzono z polskim i angielskim instalatorem Diablo II aż do okna klucza CD. Wybór folderu, postęp i zakończenie instalacji oraz instalator dodatku Lord of Destruction nie były jeszcze sprawdzone w praktyce. Jeśli coś pójdzie nie tak, dołącz do zgłoszenia plik `D2AccessSetup.log` z folderu moda.
+### Aktualizacja moda
+
+Gdy Diablo II jest już zainstalowane, asystent zaraz po uruchomieniu to wykrywa. Enter instaluje albo aktualizuje wtedy tylko moda do najnowszej wersji z GitHuba, a Escape mimo to uruchamia instalator gry. Przed aktualizacją zamknij grę.
+
+Asystent sprawdzono z polskim i angielskim instalatorem Diablo II aż do okna klucza CD oraz pobieranie i instalację moda do folderu gry. Wybór folderu, postęp i zakończenie instalacji gry oraz instalator dodatku Lord of Destruction nie były jeszcze sprawdzone w praktyce. Jeśli coś pójdzie nie tak, dołącz do zgłoszenia plik `D2AccessSetup.log`, który powstaje obok asystenta.
 
 ### Skróty instalatora bez asystenta
 
@@ -36,8 +42,8 @@ Okna klucza CD, folderu i DirectX to zwykłe okna Windows obsługiwane Tabem i E
 
 ## Uruchamianie
 
-1. Uruchom `D2AccessLauncher.exe` z folderu moda. Launcher sam znajdzie grę w `C:\Program Files (x86)\Diablo II\Game.exe`.
-2. Jeśli gra jest w innym miejscu, podaj ścieżkę jako parametr, na przykład: `D2AccessLauncher.exe "D:\Gry\Diablo II\Game.exe"`.
+1. Uruchom `D2AccessLauncher.exe` z folderu gry, do którego asystent zainstalował moda. Launcher używa `Game.exe` leżącego obok siebie; gdy go nie ma, szuka gry w rejestrze, a na końcu w `C:\Program Files (x86)\Diablo II`.
+2. Ścieżkę do gry można też podać jako parametr, na przykład: `D2AccessLauncher.exe "D:\Gry\Diablo II\Game.exe"`.
 3. Po chwili usłyszysz „Menu główne” i nazwę zaznaczonej opcji.
 
 Okno gry musi być aktywne (na pierwszym planie), inaczej gra nie przyjmuje klawiszy.
@@ -212,6 +218,7 @@ Gdy otworzy się menu NPC, mod czyta tryb i zaznaczoną opcję. Strzałki zmieni
 
 ## Pliki moda
 
+- `D2AccessSetup.exe` – asystent instalacji gry i moda oraz aktualizacji moda.
 - `D2AccessLauncher.exe` – uruchamia grę z modem.
 - `D2AccessHook.dll` – właściwy mod.
 - `audio` – dźwięki pomocnicze.

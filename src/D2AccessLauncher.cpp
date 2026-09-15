@@ -19,8 +19,33 @@ std::wstring GetModuleDirectory()
     return modulePath;
 }
 
+std::wstring InstallPathFromRegistry(HKEY root, DWORD flags)
+{
+    wchar_t buffer[MAX_PATH] = {};
+    DWORD size = sizeof(buffer);
+    if (RegGetValueW(root, L"SOFTWARE\\Blizzard Entertainment\\Diablo II", L"InstallPath", RRF_RT_REG_SZ | flags,
+                     nullptr, buffer, &size) != ERROR_SUCCESS)
+        return {};
+    return buffer;
+}
+
+// D2AccessSetup installs the mod into the game folder, so the Game.exe next to
+// the launcher comes first, then the path the Blizzard installer registered.
 std::wstring GetDefaultGamePath()
 {
+    const std::filesystem::path local = std::filesystem::path(GetModuleDirectory()) / L"Game.exe";
+    if (std::filesystem::exists(local))
+        return local.wstring();
+
+    for (const std::wstring &folder : {InstallPathFromRegistry(HKEY_LOCAL_MACHINE, RRF_SUBKEY_WOW6432KEY),
+                                       InstallPathFromRegistry(HKEY_CURRENT_USER, 0)})
+    {
+        if (folder.empty())
+            continue;
+        const std::filesystem::path candidate = std::filesystem::path(folder) / L"Game.exe";
+        if (std::filesystem::exists(candidate))
+            return candidate.wstring();
+    }
     return L"C:\\Program Files (x86)\\Diablo II\\Game.exe";
 }
 

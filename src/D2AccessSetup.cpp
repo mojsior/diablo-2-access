@@ -1,22 +1,30 @@
-// Accessible helper for Blizzard's classic Diablo II installer.
+// Accessible helper for installing classic Diablo II and the Diablo 2 Access mod.
 //
-// The installer's main menu is drawn as graphics and its licence agreement
-// only enables "Agree" after the text was scrolled with the mouse, so screen
-// reader users cannot get through it on their own. This helper drives those
-// two steps, reads every standard dialog aloud (CD-key, folder, DirectX,
+// Blizzard's installer has a graphical main menu and a licence agreement whose
+// "Agree" button only unlocks after the text was scrolled with the mouse, so
+// screen reader users cannot get through it on their own. This helper drives
+// those two steps, reads every standard dialog aloud (CD-key, folder, DirectX,
 // errors) and reports progress. The player still types their own CD-key.
+// Afterwards it downloads the newest Diablo 2 Access release from GitHub and
+// installs it into the game folder.
 
 #include "Logging.hpp"
 #include "ScreenReader.hpp"
+
+#include <nlohmann/json.hpp>
 
 #include <Windows.h>
 #include <Shlwapi.h>
 #include <commdlg.h>
 #include <conio.h>
+#include <winhttp.h>
 
 #include <algorithm>
+#include <cstdlib>
 #include <cwctype>
 #include <filesystem>
+#include <fstream>
+#include <functional>
 #include <map>
 #include <set>
 #include <string>
@@ -25,6 +33,7 @@
 
 #pragma comment(lib, "Shlwapi.lib")
 #pragma comment(lib, "Comdlg32.lib")
+#pragma comment(lib, "Winhttp.lib")
 
 namespace fs = std::filesystem;
 using namespace d2access;
@@ -34,10 +43,15 @@ namespace {
 constexpr DWORD LoopDelayMs = 250;
 constexpr ULONGLONG MainMenuSettleMs = 5000;
 constexpr ULONGLONG NoWindowExitMs = 20000;
+constexpr int NvdaClientResourceId = 101;
+constexpr const wchar_t *ReleasesUrl = L"https://api.github.com/repos/mojsior/diablo-2-access/releases?per_page=10";
+constexpr const char *ReleaseAssetSuffix = "-windows.zip";
 
 bool g_polish = true;
 bool g_autoYes = false;
 bool g_stopAtKey = false;
+bool g_modOnly = false;
+bool g_noMod = false;
 
 const wchar_t *Tr(const wchar_t *polish, const wchar_t *english)
 {
@@ -66,7 +80,7 @@ void Print(const std::wstring &text)
 }
 
 // The console is read by the screen reader when it has focus; speak directly
-// only while an installer window is in front.
+// only while another window is in front.
 void Say(const std::wstring &text)
 {
     Print(text);
@@ -96,6 +110,16 @@ bool Ask(const std::wstring &question)
         if (ch == 27)
             return false;
     }
+}
+
+std::wstring Widen(const std::string &text)
+{
+    if (text.empty())
+        return {};
+    const int size = MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
+    std::wstring wide(static_cast<size_t>(size), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), wide.data(), size);
+    return wide;
 }
 
 std::wstring StripMnemonic(std::wstring text)
@@ -142,7 +166,8 @@ std::wstring ProcessName(DWORD pid)
     if (QueryFullProcessImageNameW(process, 0, path, &size))
         name = PathFindFileNameW(path);
     CloseHandle(process);
-    std::transform(name.begin(), name.end(), name.begin(), [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
+    std::transform(name.begin(), name.end(), name.begin(),
+                   [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
     return name;
 }
 
@@ -207,6 +232,242 @@ void BringToFront(HWND hwnd)
     Sleep(300);
 }
 
+// The single-file download carries the NVDA controller client as a resource.
+void ExtractEmbeddedNvdaClient()
+{
+    const HRSRC resource = FindResourceW(nullptr, MAKEINTRESOURCEW(NvdaClientResourceId), RT_RCDATA);
+    if (resource == nullptr)
+        return;
+    const HGLOBAL loaded = LoadResource(nullptr, resource);
+    const DWORD size = SizeofResource(nullptr, resource);
+    const void *data = loaded != nullptr ? LockResource(loaded) : nullptr;
+    if (data == nullptr || size == 0)
+        return;
+
+    std::error_code error;
+    const fs::path folder = fs::temp_directory_path(error) / L"D2AccessSetup";
+    fs::create_directories(folder, error);
+    const fs::path target = folder / L"nvdaControllerClient32.dll";
+    if (fs::exists(target, error) && fs::file_size(target, error) == size)
+        return;
+    std::ofstream file(target, std::ios::binary | std::ios::trunc);
+    file.write(static_cast<const char *>(data), size);
+}
+
+// ---------------------------------------------------------------------------
+// Diablo 2 Access download
+// ---------------------------------------------------------------------------
+
+bool HttpGet(const std::wstring &url, std::string &body, const std::function<void(ULONGLONG, ULONGLONG)> &progress)
+{
+    body.clear();
+    wchar_t host[256] = {};
+    wchar_t path[4096] = {};
+    wchar_t extra[2048] = {};
+    URL_COMPONENTS parts{};
+    parts.dwStructSize = sizeof(parts);
+    parts.lpszHostName = host;
+    parts.dwHostNameLength = static_cast<DWORD>(std::size(host));
+    parts.lpszUrlPath = path;
+    parts.dwUrlPathLength = static_cast<DWORD>(std::size(path));
+    parts.lpszExtraInfo = extra;
+    parts.dwExtraInfoLength = static_cast<DWORD>(std::size(extra));
+    if (!WinHttpCrackUrl(url.c_str(), 0, 0, &parts))
+        return false;
+
+    const std::wstring object = std::wstring(path, parts.dwUrlPathLength) + std::wstring(extra, parts.dwExtraInfoLength);
+    const HINTERNET session = WinHttpOpen(L"D2AccessSetup/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+                                          WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (session == nullptr)
+        return false;
+    const HINTERNET connection = WinHttpConnect(session, std::wstring(host, parts.dwHostNameLength).c_str(), parts.nPort, 0);
+    const HINTERNET request =
+        connection != nullptr
+            ? WinHttpOpenRequest(connection, L"GET", object.c_str(), nullptr, WINHTTP_NO_REFERER,
+                                 WINHTTP_DEFAULT_ACCEPT_TYPES, parts.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0)
+            : nullptr;
+
+    bool ok = false;
+    if (request != nullptr &&
+        WinHttpSendRequest(request, L"Accept: application/vnd.github+json, application/octet-stream\r\n",
+                           static_cast<DWORD>(-1), WINHTTP_NO_REQUEST_DATA, 0, 0, 0) &&
+        WinHttpReceiveResponse(request, nullptr))
+    {
+        DWORD status = 0;
+        DWORD statusSize = sizeof(status);
+        WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX,
+                            &status, &statusSize, WINHTTP_NO_HEADER_INDEX);
+        DWORD length = 0;
+        DWORD lengthSize = sizeof(length);
+        const ULONGLONG total =
+            WinHttpQueryHeaders(request, WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER,
+                                WINHTTP_HEADER_NAME_BY_INDEX, &length, &lengthSize, WINHTTP_NO_HEADER_INDEX)
+                ? length
+                : 0;
+
+        ok = status == 200;
+        std::vector<char> buffer(64 * 1024);
+        for (;;)
+        {
+            DWORD available = 0;
+            if (!WinHttpQueryDataAvailable(request, &available))
+            {
+                ok = false;
+                break;
+            }
+            if (available == 0)
+                break;
+            DWORD read = 0;
+            if (!WinHttpReadData(request, buffer.data(), std::min<DWORD>(available, static_cast<DWORD>(buffer.size())), &read))
+            {
+                ok = false;
+                break;
+            }
+            body.append(buffer.data(), read);
+            if (progress)
+                progress(body.size(), total);
+        }
+        LogLine(L"HTTP " + std::to_wstring(status) + L" " + url + L" (" + std::to_wstring(body.size()) + L" bytes)");
+    }
+
+    if (request != nullptr)
+        WinHttpCloseHandle(request);
+    if (connection != nullptr)
+        WinHttpCloseHandle(connection);
+    WinHttpCloseHandle(session);
+    return ok;
+}
+
+struct ReleaseAsset {
+    std::wstring tag;
+    std::wstring name;
+    std::wstring url;
+};
+
+// The newest non-draft release, prereleases included (1.0 beta is one).
+bool FindLatestRelease(ReleaseAsset &asset)
+{
+    std::string body;
+    if (!HttpGet(ReleasesUrl, body, nullptr))
+        return false;
+    const nlohmann::json releases = nlohmann::json::parse(body, nullptr, false);
+    if (!releases.is_array())
+        return false;
+    for (const nlohmann::json &release : releases)
+    {
+        if (release.value("draft", false) || !release.contains("assets"))
+            continue;
+        for (const nlohmann::json &item : release["assets"])
+        {
+            const std::string name = item.value("name", std::string());
+            const std::string suffix = ReleaseAssetSuffix;
+            if (name.size() > suffix.size() && name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0)
+            {
+                asset.tag = Widen(release.value("tag_name", std::string()));
+                asset.name = Widen(name);
+                asset.url = Widen(item.value("browser_download_url", std::string()));
+                return !asset.url.empty();
+            }
+        }
+    }
+    return false;
+}
+
+bool RunHidden(const std::wstring &commandLine)
+{
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    startup.dwFlags = STARTF_USESHOWWINDOW;
+    startup.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION process{};
+    std::wstring command = commandLine;
+    if (!CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &startup,
+                        &process))
+        return false;
+    WaitForSingleObject(process.hProcess, INFINITE);
+    DWORD exitCode = 1;
+    GetExitCodeProcess(process.hProcess, &exitCode);
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    return exitCode == 0;
+}
+
+bool InstallMod(const fs::path &gameDir)
+{
+    Say(Tr(L"Sprawdzam najnowszą wersję moda Diablo 2 Access na GitHubie.",
+           L"Checking GitHub for the newest Diablo 2 Access release."));
+    ReleaseAsset asset;
+    if (!FindLatestRelease(asset))
+    {
+        Say(Tr(L"Nie udało się pobrać informacji o wydaniu. Sprawdź połączenie z internetem.",
+               L"Could not read the release information. Check your internet connection."));
+        return false;
+    }
+
+    Say(TrS(L"Pobieram wersję ", L"Downloading version ") + asset.tag + L".");
+    int lastQuarter = 0;
+    std::string archive;
+    const bool downloaded = HttpGet(asset.url, archive, [&lastQuarter](ULONGLONG done, ULONGLONG total) {
+        if (total == 0)
+            return;
+        const int quarter = static_cast<int>(done * 4 / total);
+        if (quarter > lastQuarter && quarter < 4)
+        {
+            lastQuarter = quarter;
+            Say(TrS(L"Pobrano ", L"Downloaded ") + std::to_wstring(quarter * 25) + L"%");
+        }
+    });
+    if (!downloaded || archive.empty())
+    {
+        Say(Tr(L"Pobieranie moda nie powiodło się.", L"Downloading the mod failed."));
+        return false;
+    }
+
+    std::error_code error;
+    const fs::path work = fs::temp_directory_path(error) / L"D2AccessSetup";
+    const fs::path zip = work / asset.name;
+    const fs::path extracted = work / L"release";
+    fs::create_directories(work, error);
+    fs::remove_all(extracted, error);
+    fs::create_directories(extracted, error);
+    {
+        std::ofstream file(zip, std::ios::binary | std::ios::trunc);
+        file.write(archive.data(), static_cast<std::streamsize>(archive.size()));
+    }
+
+    wchar_t system[MAX_PATH] = {};
+    GetSystemDirectoryW(system, MAX_PATH);
+    const std::wstring tar = std::wstring(system) + L"\\tar.exe";
+    if (!RunHidden(L"\"" + tar + L"\" -xf \"" + zip.wstring() + L"\" -C \"" + extracted.wstring() + L"\""))
+    {
+        Say(Tr(L"Nie udało się rozpakować moda.", L"Could not extract the mod."));
+        return false;
+    }
+
+    // Accept a zip with one top-level folder as well as files at the root.
+    fs::path source = extracted;
+    std::vector<fs::path> entries;
+    for (const fs::directory_entry &entry : fs::directory_iterator(extracted, error))
+        entries.push_back(entry.path());
+    if (entries.size() == 1 && fs::is_directory(entries.front(), error))
+        source = entries.front();
+
+    fs::copy(source, gameDir, fs::copy_options::recursive | fs::copy_options::overwrite_existing, error);
+    if (error || !fs::exists(gameDir / L"D2AccessLauncher.exe"))
+    {
+        LogLine(L"Copy error: " + Widen(error.message()));
+        Say(Tr(L"Nie udało się skopiować moda do folderu gry. Zamknij grę, jeśli jest uruchomiona, i spróbuj ponownie.",
+               L"Could not copy the mod into the game folder. Close the game if it is running and try again."));
+        return false;
+    }
+
+    Say(TrS(L"Mod Diablo 2 Access w wersji ", L"Diablo 2 Access version ") + asset.tag +
+        TrS(L" jest zainstalowany w folderze ", L" is installed in ") + gameDir.wstring() +
+        Tr(L". Grę z modem uruchamiasz plikiem D2AccessLauncher.exe z tego folderu.",
+           L". Start the game with the mod using D2AccessLauncher.exe from that folder."));
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // Finding the installer
 // ---------------------------------------------------------------------------
@@ -217,7 +478,7 @@ bool IsInstallerFolder(const fs::path &folder)
     return fs::exists(folder / L"Installer.exe", error) && fs::exists(folder / L"Installer Tome.mpq", error);
 }
 
-std::wstring KnownFolder(const wchar_t *variable, const wchar_t *suffix)
+std::wstring EnvironmentFolder(const wchar_t *variable, const wchar_t *suffix)
 {
     wchar_t buffer[MAX_PATH] = {};
     const DWORD length = GetEnvironmentVariableW(variable, buffer, MAX_PATH);
@@ -230,9 +491,12 @@ std::vector<fs::path> FindInstallers()
 {
     std::vector<fs::path> found;
     const auto add = [&found](const fs::path &folder) {
-        if (IsInstallerFolder(folder) &&
-            std::find(found.begin(), found.end(), fs::weakly_canonical(folder)) == found.end())
-            found.push_back(fs::weakly_canonical(folder));
+        std::error_code error;
+        if (!IsInstallerFolder(folder))
+            return;
+        const fs::path canonical = fs::weakly_canonical(folder, error);
+        if (std::find(found.begin(), found.end(), canonical) == found.end())
+            found.push_back(canonical);
     };
 
     wchar_t exePath[MAX_PATH] = {};
@@ -240,7 +504,8 @@ std::vector<fs::path> FindInstallers()
     add(fs::path(exePath).parent_path());
     add(fs::current_path());
 
-    for (const std::wstring &root : {KnownFolder(L"USERPROFILE", L"\\Downloads"), KnownFolder(L"USERPROFILE", L"\\Desktop")})
+    for (const std::wstring &root :
+         {EnvironmentFolder(L"USERPROFILE", L"\\Downloads"), EnvironmentFolder(L"USERPROFILE", L"\\Desktop")})
     {
         std::error_code error;
         if (root.empty() || !fs::exists(root, error))
@@ -276,14 +541,11 @@ fs::path ChooseInstallerWithDialog()
     return fs::path(file);
 }
 
-fs::path ChooseInstaller(int argc, wchar_t **argv)
+fs::path ChooseInstaller(const std::wstring &argument)
 {
-    for (int i = 1; i < argc; ++i)
+    if (!argument.empty())
     {
-        const std::wstring arg = argv[i];
-        if (arg.rfind(L"--", 0) == 0)
-            continue;
-        fs::path path(arg);
+        fs::path path(argument);
         if (fs::is_directory(path))
             path /= L"Installer.exe";
         return path;
@@ -312,8 +574,8 @@ fs::path ChooseInstaller(int argc, wchar_t **argv)
         }
     }
 
-    Say(Tr(L"Nie znaleziono instalatora. Otworzy się okno wyboru pliku, wskaż Installer.exe.",
-           L"No installer was found. A file dialog opens, select Installer.exe."));
+    Say(Tr(L"Nie znaleziono instalatora gry. Otworzy się okno wyboru pliku, wskaż Installer.exe.",
+           L"No game installer was found. A file dialog opens, select Installer.exe."));
     return ChooseInstallerWithDialog();
 }
 
@@ -328,7 +590,8 @@ std::wstring ExistingInstallPath()
     if (RegGetValueW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Blizzard Entertainment\\Diablo II", L"InstallPath",
                      RRF_RT_REG_SZ | RRF_SUBKEY_WOW6432KEY, nullptr, buffer, &size) != ERROR_SUCCESS)
         return {};
-    return buffer;
+    std::error_code error;
+    return fs::exists(fs::path(buffer) / L"Game.exe", error) ? std::wstring(buffer) : std::wstring();
 }
 
 struct DialogInfo {
@@ -471,49 +734,11 @@ bool NewInstallLog(const fs::path &folder, const fs::file_time_type &started)
     return false;
 }
 
-} // namespace
-
-int wmain(int argc, wchar_t **argv)
+// Runs Blizzard's installer. Returns the folder the game was installed to, or
+// an empty path when the installation did not finish.
+fs::path RunGameInstaller(const fs::path &installer)
 {
-    g_polish = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_POLISH;
-    for (int i = 1; i < argc; ++i)
-    {
-        const std::wstring arg = argv[i];
-        if (arg == L"--yes")
-            g_autoYes = true;
-        else if (arg == L"--stop-at-key")
-            g_stopAtKey = true;
-        else if (arg == L"--english")
-            g_polish = false;
-        else if (arg == L"--polish")
-            g_polish = true;
-    }
-
-    InitializeLogging(L"D2AccessSetup.log");
-    InitializeScreenReader();
-    Sleep(300);
-    Say(Tr(L"Asystent instalacji Diablo II. Obsłuży graficzne menu instalatora i umowę licencyjną, a pozostałe okna "
-           L"przeczyta na głos. Klucz CD wpisujesz sam.",
-           L"Diablo II installation assistant. It handles the graphical installer menu and the licence agreement and "
-           L"reads the other windows aloud. You type the CD-key yourself."));
-
-    const fs::path installer = ChooseInstaller(argc, argv);
     std::error_code error;
-    if (installer.empty() || !fs::exists(installer, error))
-    {
-        Say(Tr(L"Nie wybrano instalatora. Koniec.", L"No installer selected. Exiting."));
-        ShutdownScreenReader();
-        return 1;
-    }
-
-    const std::wstring existing = ExistingInstallPath();
-    if (!existing.empty() && fs::exists(fs::path(existing) / L"Game.exe", error))
-    {
-        Say(TrS(L"Uwaga: Diablo II jest już zainstalowane w folderze ", L"Note: Diablo II is already installed in ") +
-            existing + Tr(L". Instalator może wtedy pokazać menu gry zamiast instalacji.",
-                          L". The installer may then show the game menu instead of installing."));
-    }
-
     const fs::path tome = installer.parent_path() / L"Installer Tome.mpq";
     const ULONGLONG expectedBytes = fs::exists(tome, error) ? fs::file_size(tome, error) : 1545313752ULL;
     const fs::file_time_type started = fs::file_time_type::clock::now();
@@ -527,12 +752,11 @@ int wmain(int argc, wchar_t **argv)
                         &startup, &process))
     {
         Say(Tr(L"Nie udało się uruchomić instalatora.", L"Could not start the installer."));
-        ShutdownScreenReader();
-        return 1;
+        return {};
     }
     CloseHandle(process.hThread);
     CloseHandle(process.hProcess);
-    Say(Tr(L"Uruchamiam instalator, poczekaj chwilę.", L"Starting the installer, please wait."));
+    Say(Tr(L"Uruchamiam instalator gry, poczekaj chwilę.", L"Starting the game installer, please wait."));
 
     std::map<HWND, std::wstring> dialogTexts;
     std::set<HWND> licenseDialogs;
@@ -541,11 +765,10 @@ int wmain(int argc, wchar_t **argv)
     bool pressedInstall = false;
     bool licenseAccepted = false;
     bool keyStepSeen = false;
-    fs::path installDir = existing.empty() ? fs::path(L"C:\\Program Files (x86)\\Diablo II") : fs::path(existing);
+    fs::path installDir = L"C:\\Program Files (x86)\\Diablo II";
     int lastPercent = -1;
-    bool finished = false;
 
-    while (!finished)
+    for (;;)
     {
         Sleep(LoopDelayMs);
         const ULONGLONG now = GetTickCount64();
@@ -554,8 +777,9 @@ int wmain(int argc, wchar_t **argv)
         {
             if (now - lastWindowAt > NoWindowExitMs)
             {
-                Say(Tr(L"Instalator został zamknięty.", L"The installer was closed."));
-                break;
+                Say(Tr(L"Instalator został zamknięty przed końcem instalacji.",
+                       L"The installer was closed before the installation finished."));
+                return {};
             }
             continue;
         }
@@ -574,14 +798,13 @@ int wmain(int argc, wchar_t **argv)
 
         for (HWND dialog : dialogs)
         {
-            if (FindChildByClass(dialog, L"Internet Explorer_Server") != nullptr &&
-                ClassName(dialog) == L"#32770" && FindChildByClass(dialog, L"Edit") == nullptr)
+            if (FindChildByClass(dialog, L"Internet Explorer_Server") != nullptr && FindChildByClass(dialog, L"Edit") == nullptr)
             {
                 if (licenseDialogs.insert(dialog).second)
                 {
                     licenseAccepted = HandleLicense(dialog) || licenseAccepted;
                     if (!licenseAccepted)
-                        finished = true;
+                        return {};
                 }
                 continue;
             }
@@ -610,11 +833,11 @@ int wmain(int argc, wchar_t **argv)
                     Say(L"--stop-at-key: closing the installer.");
                     for (HWND hwnd : InstallerWindows())
                         PostMessageW(hwnd, WM_CLOSE, 0, 0);
-                    finished = true;
+                    return {};
                 }
             }
         }
-        if (finished || mainWindow == nullptr || !dialogs.empty() || !IsWindowEnabled(mainWindow))
+        if (mainWindow == nullptr || !dialogs.empty() || !IsWindowEnabled(mainWindow))
             continue;
 
         if (mainSeenAt == 0)
@@ -635,29 +858,113 @@ int wmain(int argc, wchar_t **argv)
         {
             if (NewInstallLog(installDir, started))
             {
-                Say(Tr(L"Instalacja zakończona. Zamykam instalator. Teraz możesz zainstalować dodatek Lord of Destruction "
-                       L"albo uruchomić grę przez D2AccessLauncher.",
-                       L"Installation complete. Closing the installer. You can now install Lord of Destruction or "
-                       L"start the game with D2AccessLauncher."));
+                Say(Tr(L"Instalacja gry zakończona. Zamykam instalator.", L"The game installation is complete. Closing the installer."));
                 PostMessageW(mainWindow, WM_CLOSE, 0, 0);
-                finished = true;
-                continue;
+                const std::wstring registered = ExistingInstallPath();
+                return registered.empty() ? installDir : fs::path(registered);
             }
             const ULONGLONG size = FolderSize(installDir);
             const int percent = static_cast<int>(std::min<ULONGLONG>(99, size * 100 / std::max<ULONGLONG>(expectedBytes, 1)));
             if (size > 0 && percent / 10 > lastPercent / 10)
             {
                 lastPercent = percent;
-                Say(Tr(L"Instalacja: ", L"Installing: ") + std::to_wstring(percent) + L"%");
+                Say(Tr(L"Instalacja gry: ", L"Installing the game: ") + std::to_wstring(percent) + L"%");
             }
         }
     }
+}
 
+int Finish(int code)
+{
     Sleep(1500);
     Print(Tr(L"Naciśnij dowolny klawisz, aby zamknąć asystenta.", L"Press any key to close the assistant."));
     if (!g_autoYes)
         _getwch();
     ShutdownScreenReader();
     ShutdownLogging();
-    return 0;
+    return code;
+}
+
+} // namespace
+
+int wmain(int argc, wchar_t **argv)
+{
+    g_polish = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_POLISH;
+    std::wstring pathArgument;
+    for (int i = 1; i < argc; ++i)
+    {
+        const std::wstring arg = argv[i];
+        if (arg == L"--yes")
+            g_autoYes = true;
+        else if (arg == L"--stop-at-key")
+            g_stopAtKey = true;
+        else if (arg == L"--mod-only")
+            g_modOnly = true;
+        else if (arg == L"--no-mod")
+            g_noMod = true;
+        else if (arg == L"--english")
+            g_polish = false;
+        else if (arg == L"--polish")
+            g_polish = true;
+        else if (arg.rfind(L"--", 0) != 0)
+            pathArgument = arg;
+    }
+
+    ExtractEmbeddedNvdaClient();
+    InitializeLogging(L"D2AccessSetup.log");
+    InitializeScreenReader();
+    Sleep(300);
+    Say(Tr(L"Asystent instalacji Diablo II i moda Diablo 2 Access. Przeprowadzi przez instalator gry, czytając jego okna, "
+           L"a potem pobierze i zainstaluje najnowszą wersję moda w folderze gry. Klucz CD wpisujesz sam.",
+           L"Installation assistant for Diablo II and the Diablo 2 Access mod. It guides you through the game installer, "
+           L"reading its windows, then downloads the newest mod release and installs it into the game folder. You type "
+           L"the CD-key yourself."));
+
+    std::error_code error;
+    if (g_modOnly)
+    {
+        const fs::path gameDir = pathArgument.empty() ? fs::path(ExistingInstallPath()) : fs::path(pathArgument);
+        if (gameDir.empty() || !fs::exists(gameDir / L"Game.exe", error))
+        {
+            Say(Tr(L"Nie znaleziono zainstalowanego Diablo II.", L"No Diablo II installation was found."));
+            return Finish(1);
+        }
+        return Finish(InstallMod(gameDir) ? 0 : 1);
+    }
+
+    const std::wstring existing = ExistingInstallPath();
+    if (!existing.empty())
+    {
+        if (Ask(TrS(L"Diablo II jest już zainstalowane w folderze ", L"Diablo II is already installed in ") + existing +
+                Tr(L". Naciśnij Enter, aby zainstalować lub zaktualizować tylko moda Diablo 2 Access, albo Escape, aby "
+                   L"mimo to uruchomić instalator gry.",
+                   L". Press Enter to install or update only the Diablo 2 Access mod, or Escape to run the game "
+                   L"installer anyway.")))
+            return Finish(InstallMod(existing) ? 0 : 1);
+    }
+
+    const fs::path installer = ChooseInstaller(pathArgument);
+    if (installer.empty() || !fs::exists(installer, error))
+    {
+        Say(Tr(L"Nie wybrano instalatora. Koniec.", L"No installer selected. Exiting."));
+        return Finish(1);
+    }
+
+    const fs::path gameDir = RunGameInstaller(installer);
+    if (gameDir.empty())
+        return Finish(1);
+
+    if (g_noMod)
+        return Finish(0);
+    Sleep(2000);
+    if (!Ask(Tr(L"Zainstalować teraz moda Diablo 2 Access w folderze gry? Enter instaluje, Escape pomija.",
+                L"Install the Diablo 2 Access mod into the game folder now? Enter installs, Escape skips.")))
+        return Finish(0);
+    const bool installed = InstallMod(gameDir);
+    if (installed)
+        Say(Tr(L"Gotowe. Jeśli masz dodatek Lord of Destruction, zainstaluj go teraz jego instalatorem, uruchamiając "
+               L"ponownie tego asystenta.",
+               L"Done. If you have Lord of Destruction, install it now with its installer by running this assistant "
+               L"again."));
+    return Finish(installed ? 0 : 1);
 }

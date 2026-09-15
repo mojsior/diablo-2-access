@@ -123,6 +123,8 @@ void InitializeBackend()
         L"C:\\Users\\mojsior\\Downloads",
         L"C:\\Program Files\\NVDA",
         L"C:\\Program Files (x86)\\NVDA",
+        // D2AccessSetup.exe extracts its embedded NVDA client here.
+        (std::filesystem::temp_directory_path() / L"D2AccessSetup").wstring(),
     };
 
     for (const auto &dir : searchDirs)

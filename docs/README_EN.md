@@ -8,19 +8,25 @@ Speech goes through NVDA. When NVDA is not running, the mod uses the Windows spe
 
 The mod needs the original Diablo II with the Lord of Destruction expansion, version 1.14b. Both can be bought in the Battle.net shop as "Diablo II" and "Diablo II: Lord of Destruction"; this is not Diablo II: Resurrected. After buying, Blizzard provides a downloader that fetches the installer into a folder such as `D2-1.14b-Installer-enUS` with `Installer.exe` and `Installer Tome.mpq`.
 
-Blizzard's installer has a graphical menu and a licence agreement window that cannot be accepted with the keyboard alone. That is why the mod includes the installation assistant `D2AccessSetup.exe`.
+Blizzard's installer has a graphical menu and a licence agreement window that cannot be accepted with the keyboard alone. That is why the mod comes with the installation assistant `D2AccessSetup.exe`. It guides you through installing the game and then downloads and installs the mod.
 
 ### Installing with the assistant
 
-1. Run `D2AccessSetup.exe` from the mod folder. If Windows asks for administrator rights, allow it; Blizzard's installer requires them.
-2. The assistant looks for the installer in your Downloads and Desktop folders. If it finds several, it asks you to pick one with a number; if it finds none, it opens a file dialog where you select `Installer.exe`. You can also pass the path: `D2AccessSetup.exe "D:\Downloads\D2-1.14b-Installer-enUS"`.
-3. The assistant starts the installer and chooses to install the game in the graphical menu.
-4. At the licence agreement the assistant asks: Enter accepts the agreement, Escape declines it. After you accept, it scrolls the agreement and presses "Agree" for you.
-5. Every following window (CD-key, install folder, DirectX, error messages) is read aloud and focused. You type the key yourself: the owner's name, then Tab and the 26-character key, then Enter.
-6. While files are copied, the assistant reports progress every 10%, then says the installation is complete and closes the installer.
-7. Install Lord of Destruction the same way with its own installer.
+1. Download `D2AccessSetup.exe` from the newest release on the [Releases](https://github.com/mojsior/diablo-2-access/releases) page. It is a single file, nothing to extract.
+2. Run `D2AccessSetup.exe`. If Windows asks for administrator rights, allow it; Blizzard's installer and copying into the game folder require them.
+3. The assistant looks for the game installer in your Downloads and Desktop folders. If it finds several, it asks you to pick one with a number; if it finds none, it opens a file dialog where you select `Installer.exe`. You can also pass the path: `D2AccessSetup.exe "D:\Downloads\D2-1.14b-Installer-enUS"`.
+4. The assistant starts the installer and chooses to install the game in the graphical menu.
+5. At the licence agreement the assistant asks: Enter accepts the agreement, Escape declines it. After you accept, it scrolls the agreement and presses "Agree" for you.
+6. Every following window (CD-key, install folder, DirectX, error messages) is read aloud and focused. You type the key yourself: the owner's name, then Tab and the 26-character key, then Enter.
+7. While files are copied, the assistant reports progress every 10%, then says the game installation is complete and closes the installer.
+8. The assistant asks whether to install the mod. After Enter it downloads the newest Diablo 2 Access release from GitHub, extracts it and copies it into the folder where the game was installed (usually `C:\Program Files (x86)\Diablo II`).
+9. If you have Lord of Destruction, run the assistant again and select the expansion installer.
 
-The assistant was tested with the Polish and English Diablo II installers up to the CD-key window. Choosing the folder, the progress and the end of the installation, and the Lord of Destruction installer, have not been tested in practice yet. If something goes wrong, attach `D2AccessSetup.log` from the mod folder to your report.
+### Updating the mod
+
+When Diablo II is already installed, the assistant notices it right after starting. Enter then installs or updates only the mod to the newest version from GitHub, Escape runs the game installer anyway. Close the game before updating.
+
+The assistant was tested with the Polish and English Diablo II installers up to the CD-key window, and downloading and installing the mod into the game folder was tested too. Choosing the folder, the progress and the end of the game installation, and the Lord of Destruction installer, have not been tested in practice yet. If something goes wrong, attach `D2AccessSetup.log`, written next to the assistant, to your report.
 
 ### Installer shortcuts without the assistant
 
@@ -36,8 +42,8 @@ The CD-key, folder and DirectX windows are standard Windows dialogs used with Ta
 
 ## Starting the game
 
-1. Run `D2AccessLauncher.exe` from the mod folder. It finds the game in `C:\Program Files (x86)\Diablo II\Game.exe`.
-2. If the game is installed elsewhere, pass its path, for example: `D2AccessLauncher.exe "D:\Games\Diablo II\Game.exe"`.
+1. Run `D2AccessLauncher.exe` from the game folder the assistant installed the mod into. The launcher uses the `Game.exe` next to it; if there is none, it looks up the game in the registry and finally in `C:\Program Files (x86)\Diablo II`.
+2. You can also pass the game path, for example: `D2AccessLauncher.exe "D:\Games\Diablo II\Game.exe"`.
 3. After a moment you hear "Main menu" and the selected option.
 
 The game window must be in the foreground, otherwise the game ignores keys.
@@ -212,6 +218,7 @@ When an NPC menu opens, the mod reads the mode and the selected option. Arrows c
 
 ## Mod files
 
+- `D2AccessSetup.exe` – assistant for installing the game and the mod, and for updating the mod.
 - `D2AccessLauncher.exe` – starts the game with the mod.
 - `D2AccessHook.dll` – the mod itself.
 - `audio` – sound cues.
