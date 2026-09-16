@@ -12,7 +12,7 @@ An accessibility mod for blind and low-vision players of classic Diablo II (Game
 
 ## Wymagania
 
-- Diablo II z dodatkiem Lord of Destruction w wersji 1.14b, domyślnie w `C:\Program Files (x86)\Diablo II`.
+- Diablo II z dodatkiem Lord of Destruction w wersji 1.14b, domyślnie w `C:\Program Files (x86)\Diablo II`. Nie wybieraj w menu gry opcji BATTLE.NET: uruchamia ona aktualizator Blizzarda, który psuje pliki gry, a nowsza wersja nie działa z modem ([szczegóły](docs/README_PL.md#nie-aktualizuj-gry--mod-działa-z-wersją-114b)).
 - Windows 10 lub 11.
 - NVDA (opcjonalnie; bez NVDA mod mówi syntezatorem Windows).
 
@@ -29,7 +29,7 @@ Paczka `diablo-2-access-…-windows.zip` z tego samego wydania zawiera pliki mod
 
 ## Requirements
 
-- Diablo II with Lord of Destruction, version 1.14b, by default in `C:\Program Files (x86)\Diablo II`.
+- Diablo II with Lord of Destruction, version 1.14b, by default in `C:\Program Files (x86)\Diablo II`. Do not choose BATTLE.NET in the game menu: it starts Blizzard's updater, which breaks the game files, and the newer version does not work with the mod ([details](docs/README_EN.md#keep-the-game-on-version-114b)).
 - Windows 10 or 11.
 - NVDA (optional; without NVDA the mod speaks with the Windows synthesizer).
 

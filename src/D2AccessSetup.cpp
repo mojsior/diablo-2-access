@@ -392,6 +392,32 @@ bool RunHidden(const std::wstring &commandLine)
     return exitCode == 0;
 }
 
+// Blizzard's updater raises the game to 1.14d, which the mod does not support.
+// Worse, its patch deletes patch_d2.mpq and then fails on binkw32.dll, which
+// leaves an installation that crashes at start-up. Renaming the updater keeps
+// the game on 1.14b; the file can be renamed back by hand at any time.
+void DisableBlizzardUpdater(const fs::path &gameDir)
+{
+    std::error_code error;
+    const fs::path updater = gameDir / L"BNUpdate.exe";
+    if (!fs::exists(updater, error))
+        return;
+
+    const fs::path disabled = gameDir / L"BNUpdate.exe.disabled";
+    fs::remove(disabled, error);
+    fs::rename(updater, disabled, error);
+    if (error)
+    {
+        LogLine(L"Could not disable BNUpdate.exe: " + Widen(error.message()));
+        return;
+    }
+
+    Say(Tr(L"Wyłączyłem aktualizator Blizzarda. Jego poprawka psuje pliki gry, a nowsza wersja nie działa z modem. "
+           L"Plik BNUpdate.exe.disabled możesz w każdej chwili przywrócić, usuwając końcówkę kropka disabled.",
+           L"Blizzard's updater is now disabled. Its patch breaks the game files and the newer version does not work "
+           L"with the mod. You can bring BNUpdate.exe.disabled back at any time by removing the .disabled ending."));
+}
+
 bool InstallMod(const fs::path &gameDir)
 {
     Say(Tr(L"Sprawdzam najnowszą wersję moda Diablo 2 Access na GitHubie.",
@@ -461,6 +487,7 @@ bool InstallMod(const fs::path &gameDir)
         return false;
     }
 
+    DisableBlizzardUpdater(gameDir);
     Say(TrS(L"Mod Diablo 2 Access w wersji ", L"Diablo 2 Access version ") + asset.tag +
         TrS(L" jest zainstalowany w folderze ", L" is installed in ") + gameDir.wstring() +
         Tr(L". Grę z modem uruchamiasz plikiem D2AccessLauncher.exe z tego folderu.",

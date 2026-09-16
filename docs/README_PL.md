@@ -48,6 +48,16 @@ Okna klucza CD, folderu i DirectX to zwykłe okna Windows obsługiwane Tabem i E
 
 Okno gry musi być aktywne (na pierwszym planie), inaczej gra nie przyjmuje klawiszy.
 
+### Nie aktualizuj gry — mod działa z wersją 1.14b
+
+Mod podpina się pod Diablo II 1.14b (wersja pliku 1.14.1.68) pod stałymi adresami, dlatego launcher sprawdza wersję `Game.exe` i przy innej odmawia uruchomienia, zamiast doprowadzić do awarii gry.
+
+**Nie wybieraj opcji BATTLE.NET w menu głównym.** Uruchamia ona aktualizator Blizzarda, który kasuje plik `patch_d2.mpq`, po czym przerywa pracę na `binkw32.dll` i zostawia instalację wysypującą się przy starcie komunikatem „Diablo II Exception: ACCESS_VIOLATION”. Gra przez Battle.net i tak wymaga wersji 1.14d, której mod nie obsługuje. Ręczne uruchomienie `BNUpdate.exe` również nie pomaga: Blizzard nie udostępnia już tych plików, więc aktualizator zgłasza tylko brakujący plik.
+
+Po instalacji moda `D2AccessSetup.exe` zmienia nazwę `BNUpdate.exe` na `BNUpdate.exe.disabled`, żeby gra nie mogła sama się zepsuć. Gdybyś kiedyś chciał przywrócić aktualizator, usuń końcówkę `.disabled`.
+
+Jeżeli aktualizator już się uruchomił i gra przestała startować, skopiuj plik `patch_d2.mpq` (około 8 MB) z powrotem do folderu gry — z nośnika instalacyjnego albo z innej kopii gry.
+
 ## Język
 
 Mod mówi po polsku albo po angielsku. Domyślnie wybiera język zainstalowanej gry: polska gra to polska mowa, angielska gra to angielska mowa. Nazwy z samej gry, na przykład przedmioty, lokacje i umiejętności, zawsze są w języku gry.

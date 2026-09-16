@@ -48,6 +48,16 @@ The CD-key, folder and DirectX windows are standard Windows dialogs used with Ta
 
 The game window must be in the foreground, otherwise the game ignores keys.
 
+### Keep the game on version 1.14b
+
+The mod hooks Diablo II 1.14b (file version 1.14.1.68) at fixed addresses, so the launcher checks the version of `Game.exe` and refuses to start any other build instead of crashing the game.
+
+**Do not choose BATTLE.NET in the main menu.** It starts Blizzard's updater, which deletes `patch_d2.mpq`, then fails on `binkw32.dll` and leaves an installation that crashes at start-up with "Diablo II Exception: ACCESS_VIOLATION". Playing on Battle.net needs version 1.14d anyway, which the mod does not support. Running `BNUpdate.exe` by hand does not help either: Blizzard stopped serving those patch files, so the updater only reports a missing file.
+
+After installing the mod, `D2AccessSetup.exe` renames `BNUpdate.exe` to `BNUpdate.exe.disabled` so the game cannot break itself. Remove the `.disabled` ending if you ever want the updater back.
+
+If the updater already ran and the game stopped starting, copy `patch_d2.mpq` (about 8 MB) back into the game folder from your installation media or another copy of the game.
+
 ## Language
 
 The mod speaks Polish or English. By default it follows the installed game: a Polish game gives Polish speech, an English game gives English speech. Names that come from the game itself, such as items, areas and skills, are always in the game's language.

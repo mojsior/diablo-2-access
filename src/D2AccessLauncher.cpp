@@ -6,8 +6,10 @@
 
 #include <filesystem>
 #include <string>
+#include <vector>
 
 #pragma comment(lib, "Shlwapi.lib")
+#pragma comment(lib, "Version.lib")
 
 namespace {
 
@@ -49,6 +51,33 @@ std::wstring GetDefaultGamePath()
     return L"C:\\Program Files (x86)\\Diablo II\\Game.exe";
 }
 
+// Every address the mod hooks comes from Game.exe 1.14b (file version
+// 1.14.1.68). Another build would be hooked in the wrong places and would crash
+// the game, so the launcher says so instead of starting it. When the version
+// cannot be read at all, the launcher lets the player try anyway.
+bool IsSupportedGameVersion(const std::wstring &gamePath, std::wstring &versionText)
+{
+    DWORD ignored = 0;
+    const DWORD size = GetFileVersionInfoSizeW(gamePath.c_str(), &ignored);
+    if (size == 0)
+        return true;
+
+    std::vector<std::byte> buffer(size);
+    VS_FIXEDFILEINFO *info = nullptr;
+    UINT length = 0;
+    if (!GetFileVersionInfoW(gamePath.c_str(), 0, size, buffer.data()) ||
+        !VerQueryValueW(buffer.data(), L"\\", reinterpret_cast<void **>(&info), &length) || info == nullptr)
+        return true;
+
+    const WORD major = HIWORD(info->dwFileVersionMS);
+    const WORD minor = LOWORD(info->dwFileVersionMS);
+    const WORD build = HIWORD(info->dwFileVersionLS);
+    const WORD revision = LOWORD(info->dwFileVersionLS);
+    versionText = std::to_wstring(major) + L"." + std::to_wstring(minor) + L"." + std::to_wstring(build) + L"." +
+                  std::to_wstring(revision);
+    return major == 1 && minor == 14 && build == 1 && revision == 68;
+}
+
 bool InjectDll(HANDLE processHandle, const std::wstring &dllPath)
 {
     const size_t bytes = (dllPath.size() + 1) * sizeof(wchar_t);
@@ -87,6 +116,22 @@ int wmain(int argc, wchar_t **argv)
     if (!std::filesystem::exists(gamePath))
     {
         MessageBoxW(nullptr, (L"Nie znaleziono Game.exe / Game.exe not found: " + gamePath).c_str(),
+                    L"D2AccessLauncher", MB_ICONERROR);
+        return 1;
+    }
+
+    std::wstring versionText;
+    if (!IsSupportedGameVersion(gamePath, versionText))
+    {
+        d2access::LogLine(L"Unsupported game version: " + versionText);
+        MessageBoxW(nullptr,
+                    (L"Ta wersja gry nie jest obsługiwana: " + versionText +
+                     L"\nMod działa z Diablo II 1.14b (1.14.1.68). Nie aktualizuj gry opcją BATTLE.NET "
+                     L"w menu głównym.\n\nThis game version is not supported: " +
+                     versionText +
+                     L"\nThe mod works with Diablo II 1.14b (1.14.1.68). Do not update the game through "
+                     L"BATTLE.NET in the main menu.")
+                        .c_str(),
                     L"D2AccessLauncher", MB_ICONERROR);
         return 1;
     }
