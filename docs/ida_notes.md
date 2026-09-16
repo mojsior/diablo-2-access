@@ -122,6 +122,12 @@ PlayerData:  +00 char name[16]
 
 `itemtypes.txt` ładuje `0x6362B0`: rekord 228 bajtów, tablica w `0x97E7D0`, liczba w `0x97E7D4`. W rekordzie `bodyloc1` jest na `+10`, a `bodyloc2` na `+11` (bajty, `0xFF` = nie da się założyć). Rekord `items.txt` (424 bajty, tablica `0x97EA04`, liczba `0x97EA00`) wskazuje swój typ słowem na `+286`, a drugi typ słowem na `+288`; kod przedmiotu jest na `+128`, a nazwa pliku animacji upuszczenia na `+0` (stąd łatwo pomylić początek rekordu). Dzięki temu mod sam wylicza miejsce, w które trafia broń albo zbroja, i zakłada ją pakietami `0x19` (podniesienie z plecaka) i `0x1A` (założenie). Pakiet `0x20` (`0x465FD0(32, id, x, y)`) obsługuje tylko przedmioty z flagą `useable`, czyli mikstury, zwoje i książki.
 
+### Wybór umiejętności
+
+Lista umiejętności postaci zaczyna się w `Unit+0xA8`: `+0x04` to pierwszy wpis, `+0x08` umiejętność w lewej ręce, a `+0x0C` w prawej (ustawiają je `0x641570` i `0x641600`). Wpis umiejętności ma `+0x00` wskaźnik na rekord `skills.txt`, `+0x04` następny wpis, `+0x28` wydane punkty i `+0x34` powiązany przedmiot. Identyfikator umiejętności to słowo na początku rekordu `skills.txt`, a słowo na `+0x04` trzyma flagi — gdy ustawiony jest bit `0x10`, gra nie pozwala wziąć umiejętności do ręki (tak sprawdza to `0x499B30`).
+
+Wybór idzie pakietem `0x3C` o długości 9 bajtów (builder `0x465FA0`): identyfikator umiejętności z ustawionym bitem `0x80000000` dla lewej ręki, a potem identyfikator przedmiotu albo `0xFFFFFFFF`. Pakiet `0x06` (kliknięcie lewym na jednostce) atakuje umiejętnością z lewej ręki, dlatego mod wkłada wybraną umiejętność właśnie tam.
+
 ### Menu NPC (`.\UI\dialog.cpp`)
 
 Menu rozmowy to zwykłe okno dialogowe tworzone przez `0x4A63A0`; lista otwartych okien zaczyna się w `0x7B7494`, a `0x7B7498` mówi, że jakieś jest otwarte. Wskaźniki na aktywne menu NPC leżą w `0x7B739F`, `0x7B73A3`, `0x7B73A7`, `0x7B73AB`, `0x7B73AF`, `0x7B73B3`, `0x7B73B7` i `0x7B73BB`.

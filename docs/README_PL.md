@@ -117,7 +117,16 @@ Mod dzieli otoczenie na kategorie: przedmioty, skrzynie, drzwi, kapliczki, obiek
 - Shift + Home: automatyczny marsz do celu. Ponowne naciśnięcie zatrzymuje marsz. Przy wyjściach mod sam przechodzi do następnej lokacji.
 - Control + Home: wyczyszczenie wybranego celu.
 - E: interakcja z celem, na przykład otwarcie skrzyni, rozmowa z NPC, podniesienie przedmiotu czy użycie waypointu.
-- F: atak na najbliższego potwora.
+- F: atak na najbliższego potwora — zwykły albo wybraną umiejętnością bojową.
+- S: następna umiejętność bojowa. Shift + S: poprzednia. Control + S: powrót do zwykłego ataku.
+
+### Umiejętności bojowe (S)
+
+Klawisz S przechodzi po umiejętnościach, które postać już zna, i ustawia wybraną do ataku. Mod czyta nazwę, poziom i pozycję na liście, na przykład „Zamach, poziom 1. 1 z 2. F używa tej umiejętności”. Potem każde naciśnięcie F atakuje wskazanego potwora tą umiejętnością, a Control + S wraca do zwykłego ataku bronią.
+
+Na liście są tylko umiejętności, w które włożono punkt (albo dodają je przedmioty) i które da się trzymać w ręce. Umiejętności bierne i aury, jak mistrzostwa broni czy aury paladyna, działają same z siebie i gra nie pozwala ich wybrać, więc mod ich nie proponuje. Punkty rozdajesz w drzewku pod klawiszem T.
+
+Gdy postać nie zna jeszcze żadnej umiejętności, mod powie „Nie masz jeszcze umiejętności do wyboru".
 
 Gdy obok postaci pojawi się przedmiot, na przykład wypadnie ze skrzyni albo z potwora, mod powie „Na ziemi:” i nazwę. Takie przedmioty są w kategorii „przedmioty”.
 
@@ -233,7 +242,7 @@ Pozycja „Konfiguracja sterowania” otwiera listę wszystkich akcji gry razem 
 - Gdy postać zginie, mod to powie. Założone przedmioty zostają przy zwłokach.
 - W chwili śmierci gra sama zapisuje postać z zerowym życiem.
 - Naciśnij Escape, aby odrodzić się w mieście z pełnym życiem. To życie trafi do zapisu dopiero przy następnym zapisie, dlatego wychodź z gry przez menu (Escape, „Zapisz i wyjdź z gry”), a nie zamykając okno.
-- Zwłoki zostają w mieście także po wyjściu i ponownym wczytaniu, więc ekwipunek trzeba odzyskać. Zwłoki są w kategorii „gracze” jako „Zwłoki:” i imię postaci. Wybierz je, podejdź (Shift + Home) i naciśnij E.
+- Zwłoki zostają tam, gdzie postać zginęła, także po wyjściu i ponownym wczytaniu gry. Jeśli zginęła w lochu, po ekwipunek trzeba tam wrócić — mod pokazuje cele tylko z lokacji, w której właśnie jesteś. Zwłoki są w kategorii „gracze” jako „Zwłoki:” i imię postaci. Wybierz je, podejdź (Shift + Home) i naciśnij E.
 - Jeśli po wczytaniu postać ma zero życia, mod ostrzeże o tym zaraz po wejściu do gry. Porozmawiaj wtedy z uzdrowicielem w mieście (w pierwszym akcie z Akarą), a przywróci pełne życie.
 
 ## Dziennik zadań (Q)

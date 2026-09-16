@@ -371,6 +371,9 @@ struct SkillDefinition {
     int nameStringId = 0;
     int shortStringId = 0;
     int elementType = 0;
+    // False for passive skills and auras, which the game refuses to put in a
+    // hand (the skill tree checks the same flag, 0x499B30).
+    bool selectable = true;
 };
 
 bool ReadSkillDefinition(int skillId, SkillDefinition &skill);
@@ -382,5 +385,12 @@ int PlayerSkillPoints(uintptr_t unit, int skillId);
 int SkillBonusLevels(uintptr_t unit, const SkillDefinition &skill);
 // Packet 0x3B, sent by the skill tree click handler (0x499F70).
 bool SendAddSkillPoint(int skillId);
+// Packet 0x3C: puts a skill in one hand, like clicking it in the skill tree.
+// Skill 0 is the normal attack. The left hand is what a left click uses, so it
+// is the hand the attack key works with.
+bool SendSelectSkill(int skillId, bool leftHand);
+// Skill the unit currently has in that hand, 0 for the normal attack and -1
+// when it cannot be read (skill list at Unit+0xA8, +0x08 left, +0x0C right).
+int SelectedSkillId(uintptr_t unit, bool leftHand);
 
 } // namespace d2access::game

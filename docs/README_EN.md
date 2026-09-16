@@ -117,7 +117,16 @@ The mod sorts the world into categories: items, chests, doors, shrines, objects,
 - Shift + Home: walk to the target automatically. Press again to stop. At exits the mod takes you into the next area.
 - Control + Home: clear the selected target.
 - E: interact with the target, for example open a chest, talk to an NPC, pick up an item or use a waypoint.
-- F: attack the nearest monster.
+- F: attack the nearest monster, with the weapon or with the chosen combat skill.
+- S: next combat skill. Shift + S: previous one. Control + S: back to the normal attack.
+
+### Combat skills (S)
+
+S walks through the skills the character already knows and puts the chosen one into the attack. The mod reads its name, level and place in the list, for example "Bash, level 1. 1 of 2. F uses this skill." Every press of F then attacks the selected monster with it, and Control + S goes back to the plain weapon attack.
+
+The list holds only skills that have a point in them (or come from items) and that the game lets you hold in a hand. Passive skills and auras, such as weapon masteries or paladin auras, work on their own and cannot be chosen, so the mod leaves them out. Points are spent in the skill tree under T.
+
+When the character knows no skill yet, the mod says "You have no skills to choose yet."
 
 When an item appears near the character, for example from a chest or a monster, the mod says "On the ground:" and its name. These items are in the "items" category.
 
@@ -233,7 +242,7 @@ The options sub-menu holds sound, video, automap and control options. The mod re
 - When your character dies, the mod says so. The equipped items stay on the corpse.
 - At the moment of death the game itself saves the character with zero life.
 - Press Escape to respawn in town with full life. That life reaches the save file only with the next save, so leave the game through the menu (Escape, "Save and exit game"), not by closing the window.
-- The corpse stays in town even after leaving and reloading, so the equipment has to be taken back. The corpse is in the "players" category as "Corpse:" followed by the character name. Select it, walk there (Shift + Home) and press E.
+- The corpse stays where the character died, even after leaving and reloading the game. If that was a dungeon, you have to go back there for the equipment: the mod only lists targets from the area you are in. The corpse is in the "players" category as "Corpse:" followed by the character name. Select it, walk there (Shift + Home) and press E.
 - If a loaded character has zero life, the mod warns you right after entering the game. Talk to the healer in town (Akara in act one) to restore full life.
 
 ## Quest log (Q)

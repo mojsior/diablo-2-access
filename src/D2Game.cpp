@@ -813,6 +813,12 @@ bool ReadSkillDefinition(int skillId, SkillDefinition &skill)
     Read(txt + 0x194, descId);
     Read(txt + 0x1DC, elementType);
 
+    // skills.txt +0x04 holds the flag word with passive, aura and the rest;
+    // 0x499B30 refuses to select a skill when bit 0x10 is set.
+    std::uint16_t flags = 0;
+    Read(txt + 0x04, flags);
+    skill.selectable = (flags & 0x10) == 0;
+
     skill.id = skillId;
     skill.classId = classId;
     skill.requiredLevel = requiredLevel;
@@ -1048,6 +1054,31 @@ bool SendAddSkillPoint(int skillId)
     std::vector<std::uint8_t> packet{0x3B};
     PutU16(packet, static_cast<std::uint32_t>(skillId));
     return SendPacket(packet.data(), static_cast<int>(packet.size()));
+}
+
+bool SendSelectSkill(int skillId, bool leftHand)
+{
+    // 0x465FA0(0x3C, skill | 0x80000000 for the left hand, item or -1).
+    constexpr std::uint32_t LeftHandFlag = 0x80000000;
+    constexpr std::uint32_t NoItem = 0xFFFFFFFF;
+    if (skillId < 0)
+        return false;
+    const std::uint32_t hand = static_cast<std::uint32_t>(skillId) | (leftHand ? LeftHandFlag : 0);
+    return SendDwords(0x3C, {hand, NoItem});
+}
+
+int SelectedSkillId(uintptr_t unit, bool leftHand)
+{
+    constexpr uintptr_t SkillListLeft = 0x08;
+    constexpr uintptr_t SkillListRight = 0x0C;
+    const uintptr_t skills = unit != 0 ? ReadPtr(unit + UnitSkills) : 0;
+    const uintptr_t skill = skills != 0 ? ReadPtr(skills + (leftHand ? SkillListLeft : SkillListRight)) : 0;
+    if (skill == 0)
+        return 0;
+
+    const uintptr_t txt = ReadPtr(skill);
+    std::int16_t id = -1;
+    return txt != 0 && Read(txt, id) ? id : -1;
 }
 
 bool SendPickupItem(std::uint32_t unitId)

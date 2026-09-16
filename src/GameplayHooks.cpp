@@ -236,7 +236,7 @@ constexpr int ItemTypeArmor = 50;
 constexpr int UiInventoryPanel = 1;
 constexpr int DropAnnounceDistance = 20;
 constexpr int PresetLiveMatchDistance = 5;
-constexpr const wchar_t *GameplayVersion = L"1.1 beta";
+constexpr const wchar_t *GameplayVersion = L"1.2 beta";
 
 constexpr int NpcMenuOffset_SelectedIndex = 0x44;
 constexpr int NpcMenuOffset_SelectableCount = 0x4C;
@@ -1649,6 +1649,81 @@ void InteractKeyPressed(const game::UnitInfo &player)
     InteractWithTarget(player, target, true);
 }
 
+// ---------------------------------------------------------------------------
+// Combat skills
+// ---------------------------------------------------------------------------
+
+// The attack key sends a left click (packet 0x06), which the game answers with
+// the skill in the left hand. So choosing a skill means putting it there, and
+// the attack key then uses it.
+std::vector<int> KnownSkillIds(uintptr_t playerUnit)
+{
+    std::vector<int> ids;
+    std::uint32_t classId = 0;
+    if (!game::Read(playerUnit + game::off::UnitClassId, classId))
+        return ids;
+
+    for (int id : game::ClassSkillIds(classId))
+    {
+        game::SkillDefinition skill;
+        if (!game::ReadSkillDefinition(id, skill) || !skill.selectable)
+            continue;
+        if (game::PlayerSkillPoints(playerUnit, id) + game::SkillBonusLevels(playerUnit, skill) <= 0)
+            continue;
+        ids.push_back(id);
+    }
+    return ids;
+}
+
+std::wstring SkillLabel(uintptr_t playerUnit, int skillId)
+{
+    game::SkillDefinition skill;
+    if (!game::ReadSkillDefinition(skillId, skill))
+        return TrS(L"Umiejętność ", L"Skill ") + std::to_wstring(skillId);
+
+    std::wstring name = panels::CleanText(game::StringById(skill.nameStringId));
+    if (name.empty())
+        name = TrS(L"Umiejętność ", L"Skill ") + std::to_wstring(skillId);
+    const int level = game::PlayerSkillPoints(playerUnit, skillId) + game::SkillBonusLevels(playerUnit, skill);
+    return name + TrS(L", poziom ", L", level ") + std::to_wstring(level);
+}
+
+void SelectCombatSkill(const game::UnitInfo &player, int delta)
+{
+    const std::vector<int> ids = KnownSkillIds(player.unit);
+    if (ids.empty())
+    {
+        Say(Tr(L"Nie masz jeszcze umiejętności do wyboru. Dodaj punkt w drzewku pod klawiszem T.",
+               L"You have no skills to choose yet. Spend a point in the skill tree under T."));
+        return;
+    }
+
+    const int count = static_cast<int>(ids.size());
+    const int current = game::SelectedSkillId(player.unit, true);
+    const auto found = std::find(ids.begin(), ids.end(), current);
+    int index = found != ids.end() ? static_cast<int>(std::distance(ids.begin(), found)) + delta
+                                   : (delta < 0 ? count - 1 : 0);
+    index = ((index % count) + count) % count;
+
+    const int skillId = ids[static_cast<size_t>(index)];
+    if (!game::SendSelectSkill(skillId, true))
+    {
+        Say(Tr(L"Nie można teraz zmienić umiejętności.", L"The skill cannot be changed now."));
+        return;
+    }
+
+    PlayCue(CueId::Item);
+    Say(SkillLabel(player.unit, skillId) + L". " + std::to_wstring(index + 1) + TrS(L" z ", L" of ") +
+        std::to_wstring(count) + Tr(L". F używa tej umiejętności.", L". F uses this skill."));
+}
+
+void SelectNormalAttack(const game::UnitInfo &player)
+{
+    (void)player;
+    game::SendSelectSkill(0, true);
+    Say(Tr(L"Zwykły atak. F atakuje bronią.", L"Normal attack. F attacks with the weapon."));
+}
+
 void AttackKeyPressed(const game::UnitInfo &player)
 {
     StopAutoWalk();
@@ -1796,6 +1871,8 @@ void SpeakHelp()
            L"Page Down i Page Up wybierają następny i poprzedni cel. Control plus Page Down lub Page Up zmienia kategorię. "
            L"Home czyta drogę do celu. Shift plus Home idzie automatycznie do celu, ponowne naciśnięcie zatrzymuje. "
            L"Control plus Home czyści wybrany cel. E wykonuje interakcję z celem, F atakuje potwora. "
+           L"S wybiera następną umiejętność bojową, Shift plus S poprzednią, Control plus S wraca do zwykłego "
+           L"ataku. Wybrana umiejętność trafia na lewą rękę, więc F atakuje właśnie nią. "
            L"Z czyta procent życia, Shift plus Z procent many, X procent doświadczenia do następnego poziomu. "
            L"C otwiera kartę postaci, I ekwipunek. W panelu strzałki wybierają pole, Enter podnosi lub odkłada "
            L"przedmiot albo dodaje punkt atrybutu, Shift plus Enter używa przedmiotu, broń i zbroję od razu "
@@ -1817,6 +1894,8 @@ void SpeakHelp()
            L"Page Down and Page Up select the next and previous target. Control plus Page Down or Page Up changes "
            L"the category. Home reads the path to the target. Shift plus Home walks to the target, press again to "
            L"stop. Control plus Home clears the target. E interacts with the target, F attacks a monster. "
+           L"S chooses the next combat skill, Shift plus S the previous one, Control plus S goes back to the "
+           L"normal attack. The chosen skill goes into the left hand, so F attacks with it. "
            L"Z reads life percentage, Shift plus Z mana percentage, X experience missing to the next level. "
            L"C opens the character sheet, I the inventory. In a panel arrows select a field, Enter picks up or "
            L"places an item or adds a stat point, Shift plus Enter uses an item, equips weapons and armor, or "
@@ -2464,6 +2543,12 @@ void ProcessKeyEvent(const game::UnitInfo &player, const KeyEvent &event)
     case 'E':
         InteractKeyPressed(player);
         break;
+    case 'S':
+        if (event.ctrl)
+            SelectNormalAttack(player);
+        else
+            SelectCombatSkill(player, event.shift ? -1 : +1);
+        break;
     case 'F':
         AttackKeyPressed(player);
         break;
@@ -3038,7 +3123,8 @@ bool IsGameplayKeyCaptured(DWORD virtualKey)
     if (virtualKey == VK_F1 || virtualKey == VK_F2 || virtualKey == VK_PRIOR || virtualKey == VK_NEXT ||
         virtualKey == VK_HOME || virtualKey == VK_UP || virtualKey == VK_DOWN || virtualKey == VK_LEFT ||
         virtualKey == VK_RIGHT || virtualKey == 'E' || virtualKey == 'F' || virtualKey == 'G' ||
-        virtualKey == 'H' || virtualKey == 'K' || virtualKey == 'L' || virtualKey == 'Q' || virtualKey == 'Z' ||
+        virtualKey == 'H' || virtualKey == 'K' || virtualKey == 'L' || virtualKey == 'Q' || virtualKey == 'S' ||
+        virtualKey == 'Z' ||
         virtualKey == 'X' || virtualKey == VK_CLEAR || (virtualKey >= VK_NUMPAD1 && virtualKey <= VK_NUMPAD9))
         return true;
 

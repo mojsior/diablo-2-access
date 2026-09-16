@@ -264,8 +264,11 @@ void ResetQuestLog()
 
 bool IsQuestLogOpen()
 {
+    // Only 2 means the panel is up; 1 is a state the game passes through, and
+    // treating it as open stole the arrows from the skill tree.
+    constexpr int QuestLogOpen = 2;
     int state = 0;
-    return game::Read(game::Absolute(VaQuestLogState), state) && state != 0;
+    return game::Read(game::Absolute(VaQuestLogState), state) && state == QuestLogOpen;
 }
 
 bool IsQuestLogOpenForKeys()
