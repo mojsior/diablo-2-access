@@ -236,7 +236,7 @@ constexpr int ItemTypeArmor = 50;
 constexpr int UiInventoryPanel = 1;
 constexpr int DropAnnounceDistance = 20;
 constexpr int PresetLiveMatchDistance = 5;
-constexpr const wchar_t *GameplayVersion = L"1.0 beta";
+constexpr const wchar_t *GameplayVersion = L"1.1 beta";
 
 constexpr int NpcMenuOffset_SelectedIndex = 0x44;
 constexpr int NpcMenuOffset_SelectableCount = 0x4C;
