@@ -146,13 +146,17 @@ Ekwipunek ma trzy obszary: założone przedmioty, plecak (10 kolumn na 4 wiersze
 
 - Strzałki: przechodzenie po polach. Z górnego wiersza plecaka strzałka w górę prowadzi do założonych przedmiotów, a z dolnego strzałka w dół do pasa.
 - Enter: podniesienie przedmiotu na kursor, odłożenie go, założenie albo zamiana.
-- Shift + Enter: użycie przedmiotu, na przykład wypicie mikstury.
+- Shift + Enter: użycie przedmiotu, na przykład wypicie mikstury, albo założenie broni lub zbroi prosto z plecaka.
 - Spacja: pełny opis przedmiotu, taki sam jak w dymku gry. Zawiera obronę lub obrażenia, wytrzymałość, wymagania i właściwości magiczne. Działa w plecaku i na założonych przedmiotach, gdy nic nie trzymasz na kursorze.
 - Tab: przejście do karty postaci, jeśli jest otwarta.
 
 Mod potwierdza akcje: „Trzymasz:”, „Odłożono.”, „Założono.”, „Użyto:” albo „Nie można tego zrobić.”.
 
 ### Jak założyć przedmiot
+
+Krótka droga: wybierz przedmiot w plecaku i naciśnij Shift + Enter. Gra sama włoży go na właściwe miejsce, a mod powie „Założono:” i nazwę. Pierścienie, amulety i drugą broń zakłada się dłuższą drogą, bo miejsce wybiera wtedy gra.
+
+Dłuższa droga, w której sam wybierasz miejsce:
 
 1. W plecaku wybierz przedmiot i naciśnij Enter. Usłyszysz „Trzymasz:” i nazwę.
 2. Strzałką w górę przejdź z górnego wiersza plecaka do założonych przedmiotów.
@@ -202,7 +206,17 @@ Escape w trakcie gry otwiera menu z opcjami: opcje, zapisz i wyjdź z gry, powr�
 - Strzałka w lewo i w prawo: zmiana ustawienia albo przesunięcie suwaka.
 - Escape: zamknięcie całego menu i powrót do gry. Do poprzedniego menu wraca pozycja „Poprzednie menu”.
 
-Podmenu opcji zawiera opcje dźwięku, obrazu i automapy. Mod czyta nazwę ustawienia, jego wartość (na przykład „włączone” czy „60%”) oraz pozycję na liście. Ekran konfiguracji klawiszy nie jest jeszcze udostępniony.
+Podmenu opcji zawiera opcje dźwięku, obrazu, automapy i sterowania. Mod czyta nazwę ustawienia, jego wartość (na przykład „włączone” czy „60%”) oraz pozycję na liście.
+
+### Konfiguracja sterowania
+
+Pozycja „Konfiguracja sterowania” otwiera listę wszystkich akcji gry razem z przypisanymi klawiszami.
+
+- Strzałka w górę i w dół: wybór akcji. Mod czyta jej nazwę, klawisz główny i zapasowy oraz pozycję na liście. Nagłówki są pomijane.
+- Strzałka w lewo i w prawo: przełączanie między klawiszem głównym a zapasowym.
+- Enter: przypisanie nowego klawisza. Mod powie „Naciśnij nowy klawisz”; naciśnij wybrany klawisz albo Escape, aby anulować. Potem mod przeczyta akcję z nowym klawiszem.
+- Tab: przejście do przycisków na dole (ustawienia domyślne, zatwierdzenie, anulowanie) i z powrotem do listy. Na przyciskach strzałki wybierają przycisk, a Enter go naciska.
+- Spacja: ponowne przeczytanie wybranej akcji.
 
 ## Śmierć i zwłoki
 
@@ -212,9 +226,22 @@ Podmenu opcji zawiera opcje dźwięku, obrazu i automapy. Mod czyta nazwę ustaw
 - Zwłoki zostają w mieście także po wyjściu i ponownym wczytaniu, więc ekwipunek trzeba odzyskać. Zwłoki są w kategorii „gracze” jako „Zwłoki:” i imię postaci. Wybierz je, podejdź (Shift + Home) i naciśnij E.
 - Jeśli po wczytaniu postać ma zero życia, mod ostrzeże o tym zaraz po wejściu do gry. Porozmawiaj wtedy z uzdrowicielem w mieście (w pierwszym akcie z Akarą), a przywróci pełne życie.
 
+## Dziennik zadań (Q)
+
+Q otwiera i zamyka dziennik zadań. Mod czyta akt oraz wybrane zadanie razem z tekstem, który dziennik dla niego pokazuje, na przykład że zadanie czeka albo zostało wykonane.
+
+- Strzałka w górę i w dół: poprzednie lub następne zadanie w akcie.
+- Strzałka w lewo i w prawo: poprzedni lub następny akt. W aktach, do których postać jeszcze nie dotarła, nie ma zadań.
+- Spacja: ponowne przeczytanie wybranego zadania.
+- Q: zamknięcie dziennika.
+
 ## Rozmowy z NPC
 
-Gdy otworzy się menu NPC, mod czyta tryb i zaznaczoną opcję. Strzałki zmieniają opcję, Enter wybiera, Escape zamyka.
+Gdy otworzy się menu NPC, mod czyta tryb i zaznaczoną opcję.
+
+- Strzałka w górę i w dół: poprzednia lub następna opcja. Gdy menu jest otwarte, strzałki nie przesuwają już postaci.
+- Enter: wybór opcji.
+- Escape: zamknięcie menu.
 
 ## Pliki moda
 

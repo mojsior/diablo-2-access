@@ -9,6 +9,9 @@ void ShutdownGameplayHooks();
 void OnGameEntered();
 void OnGameLeft();
 bool IsGameplayDialogActive();
+// True while an NPC menu with choosable entries is open. Safe from the keyboard
+// hook thread.
+bool IsNpcMenuOpenForKeys();
 void NotifyGameplayVirtualKeyState(DWORD virtualKey, bool isDown);
 bool HandleGameplayVirtualKey(DWORD virtualKey);
 // Keys the mod takes over in game. Enter, Space and Tab are only taken while the

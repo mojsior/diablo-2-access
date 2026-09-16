@@ -998,6 +998,51 @@ bool ItemIsType(uintptr_t item, int itemType)
     return item != 0 && SehItemIsType(Absolute(VaItemIsType), item, itemType) != 0;
 }
 
+bool ItemBodyLocations(uintptr_t item, int &primary, int &secondary)
+{
+    // items.txt (record 424 bytes, table at 0x97EA04, count at 0x97EA00) points
+    // at its itemtypes.txt row with a word at +286 ("type"); that row (228
+    // bytes, table at 0x97E7D0, count at 0x97E7D4) holds bodyloc1 at +10 and
+    // bodyloc2 at +11. 0xFF means the type cannot be worn.
+    constexpr uintptr_t VaItemsTable = 0x97EA04;
+    constexpr uintptr_t VaItemsCount = 0x97EA00;
+    constexpr uintptr_t VaItemTypesTable = 0x97E7D0;
+    constexpr uintptr_t VaItemTypesCount = 0x97E7D4;
+    constexpr uintptr_t ItemsRecordSize = 424;
+    constexpr uintptr_t ItemTypesRecordSize = 228;
+
+    primary = 0;
+    secondary = 0;
+
+    std::uint32_t classId = 0;
+    std::int32_t itemCount = 0;
+    const uintptr_t itemTable = ReadPtr(Absolute(VaItemsTable));
+    if (item == 0 || !Read(item + off::UnitClassId, classId) || itemTable == 0 ||
+        !Read(Absolute(VaItemsCount), itemCount) || itemCount <= 0 ||
+        classId >= static_cast<std::uint32_t>(itemCount))
+        return false;
+
+    std::uint16_t typeIndex = 0;
+    constexpr uintptr_t ItemsOffset_Type = 286;
+    if (!Read(itemTable + static_cast<uintptr_t>(classId) * ItemsRecordSize + ItemsOffset_Type, typeIndex))
+        return false;
+
+    std::int32_t typeCount = 0;
+    const uintptr_t typeTable = ReadPtr(Absolute(VaItemTypesTable));
+    if (typeTable == 0 || !Read(Absolute(VaItemTypesCount), typeCount) || typeCount <= 0 ||
+        typeIndex >= static_cast<std::uint16_t>(typeCount))
+        return false;
+
+    std::uint8_t first = 0xFF;
+    std::uint8_t second = 0xFF;
+    const uintptr_t typeRecord = typeTable + static_cast<uintptr_t>(typeIndex) * ItemTypesRecordSize;
+    Read(typeRecord + 10, first);
+    Read(typeRecord + 11, second);
+    primary = first == 0xFF ? 0 : first;
+    secondary = second == 0xFF ? 0 : second;
+    return primary != 0 || secondary != 0;
+}
+
 bool SendAddSkillPoint(int skillId)
 {
     std::vector<std::uint8_t> packet{0x3B};

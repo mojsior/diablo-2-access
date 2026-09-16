@@ -322,6 +322,9 @@ std::wstring ItemFullName(uintptr_t item);
 // ITEMS_CheckItemType (0x626320) with itemtypes.txt rows, e.g. 9 potion,
 // 22 scroll, 45 weapon, 50 armor (shields included).
 bool ItemIsType(uintptr_t item, int itemType);
+// Body locations an item may be worn in, from itemtypes.txt. False for items
+// that cannot be worn at all, such as potions and scrolls.
+bool ItemBodyLocations(uintptr_t item, int &primary, int &secondary);
 
 // UI panel flags (D2CLIENT UI vars at 0x798E00).
 bool IsUiPanelOpen(int index);

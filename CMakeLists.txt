@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(D2AccessHook SHARED
     src/AudioCue.cpp
+    src/Controls.cpp
     src/D2AccessHook.cpp
     src/D2Game.cpp
     src/EventLog.cpp
@@ -20,6 +21,7 @@ add_library(D2AccessHook SHARED
     src/McpServer.cpp
     src/MenuAccess.cpp
     src/Panels.cpp
+    src/QuestLog.cpp
     src/SkillTree.cpp
     src/Pathfinder.cpp
     src/ScreenReader.cpp

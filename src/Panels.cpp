@@ -103,6 +103,8 @@ enum class ItemAction : std::uint8_t {
     None,
     Move,
     Use,
+    EquipPick,  // waiting for the item to reach the cursor
+    EquipPlace, // waiting for the game to put it on the body
 };
 
 struct State {
@@ -117,6 +119,12 @@ struct State {
     int gridRow = 0;
     size_t equipmentIndex = 0;
     int beltSlot = 0;
+
+    // Shift+Enter equipping: where the item came from and where it goes.
+    int equipBodyLocation = 0;
+    std::uint32_t equipItemId = 0;
+    int equipColumn = 0;
+    int equipRow = 0;
 
     int pendingStat = -1;
     int pendingStatCount = 0;
@@ -622,6 +630,38 @@ void InventoryActivate(uintptr_t player, game::Point playerPosition, bool use)
                 Say(Tr(L"Pusto.", L"Empty."));
                 return;
             }
+            // Weapons and armor go the way the panel does it by hand: onto the
+            // cursor first, then into the slot their type belongs to. The game
+            // only drinks or reads items through the "use" packet.
+            int primary = 0;
+            int secondary = 0;
+            if (game::ItemBodyLocations(item, primary, secondary))
+            {
+                if (cursor != 0)
+                {
+                    Say(Tr(L"Najpierw odłóż trzymany przedmiot.", L"Put down the held item first."));
+                    return;
+                }
+
+                GridView body;
+                ReadGrid(inventory, GridBody, body);
+                int slot = primary != 0 ? primary : secondary;
+                if (primary != 0 && secondary != 0 && body.At(primary, 0) != 0 && body.At(secondary, 0) == 0)
+                    slot = secondary;
+                if (slot == 0)
+                {
+                    Say(Tr(L"Nie można tego zrobić.", L"Cannot do that."));
+                    return;
+                }
+
+                g_state.equipBodyLocation = slot;
+                g_state.equipItemId = ItemId(item);
+                g_state.equipColumn = g_state.gridColumn;
+                g_state.equipRow = g_state.gridRow;
+                game::SendPickItemFromStorage(ItemId(item));
+                StartItemAction(ItemAction::EquipPick, cursor, item);
+                return;
+            }
             game::SendUseStorageItem(ItemId(item), playerPosition);
             StartItemAction(ItemAction::Use, cursor, item);
             return;
@@ -712,9 +752,57 @@ void ProcessItemAction(uintptr_t player)
     const std::uint32_t cursorId = ItemId(cursor);
     const bool timedOut = GetTickCount64() - g_state.itemActionTick > ItemActionTimeoutMs;
 
+    if (g_state.itemAction == ItemAction::EquipPick)
+    {
+        if (cursor != 0 && cursorId == g_state.equipItemId)
+        {
+            game::SendEquipCursorItem(g_state.equipItemId, g_state.equipBodyLocation);
+            g_state.itemAction = ItemAction::EquipPlace;
+            g_state.itemActionTick = GetTickCount64();
+        }
+        else if (timedOut)
+        {
+            g_state.itemAction = ItemAction::None;
+            Say(Tr(L"Nie można tego zrobić.", L"Cannot do that."));
+        }
+        return;
+    }
+
+    if (g_state.itemAction == ItemAction::EquipPlace)
+    {
+        game::ItemEntry worn;
+        if (g_state.usedItem != 0 && game::ReadItemEntry(g_state.usedItem, worn) && worn.bodyLocation != 0)
+        {
+            g_state.itemAction = ItemAction::None;
+            PlayCue(CueId::Item);
+            Say(TrS(L"Założono: ", L"Equipped: ") + g_state.usedItemName + L".");
+        }
+        else if (timedOut)
+        {
+            g_state.itemAction = ItemAction::None;
+            // The character does not meet the requirements, so the item stayed
+            // on the cursor; put it back where it came from.
+            if (cursor != 0 && cursorId == g_state.equipItemId)
+                game::SendPlaceItemInStorage(g_state.equipItemId, g_state.equipColumn, g_state.equipRow,
+                                             game::ItemPageInventory);
+            Say(Tr(L"Nie można tego zrobić.", L"Cannot do that."));
+        }
+        return;
+    }
+
     if (g_state.itemAction == ItemAction::Use)
     {
-        if (!ItemStillInInventory(inventory, g_state.usedItem))
+        // Packet 0x20 is what a right click sends: a potion is drunk, a weapon
+        // or a piece of armor is equipped. Equipped items stay in the item list
+        // but get a body location, so both outcomes can be told apart.
+        game::ItemEntry entry;
+        if (g_state.usedItem != 0 && game::ReadItemEntry(g_state.usedItem, entry) && entry.bodyLocation != 0)
+        {
+            g_state.itemAction = ItemAction::None;
+            PlayCue(CueId::Item);
+            Say(TrS(L"Założono: ", L"Equipped: ") + g_state.usedItemName + L".");
+        }
+        else if (!ItemStillInInventory(inventory, g_state.usedItem))
         {
             g_state.itemAction = ItemAction::None;
             PlayCue(CueId::Item);
@@ -723,6 +811,7 @@ void ProcessItemAction(uintptr_t player)
         else if (timedOut)
         {
             g_state.itemAction = ItemAction::None;
+            Say(Tr(L"Nie można tego zrobić.", L"Cannot do that."));
         }
         return;
     }

@@ -114,9 +114,56 @@ PlayerData:  +00 char name[16]
 | `0x43ADF0` | poziom trudności 0/1/2 (bajt) |
 | `0x479E40` | `fastcall(Item*, wchar_t* buf, int size)` - pełna nazwa przedmiotu |
 | `0x97E850` | wskaźnik na `experience.txt`: wiersze 32 bajty (7 klas + ExpRatio), wiersz 0 = MaxLvl, wiersz n = doświadczenie na poziom n |
-| `0x798E00` | UI vars (`sub_440AD0`, 38 wpisów): 1 = ekwipunek, 2 = karta postaci |
+| `0x798E00` | UI vars (`sub_440AD0`, 38 wpisów): 1 = ekwipunek, 2 = karta postaci, 4 = drzewko umiejętności, 9 = menu gry, 11 = konfiguracja sterowania. `sub_4431D0` (`fastcall(index, tryb)`) je przełącza, `sub_46C630` to rozdzielacz paneli |
 
 Życie, mana i wytrzymałość są zapisane jako wartość << 8. Kara odporności: 0 / 40 / 100.
+
+### Typy przedmiotów i miejsca założenia
+
+`itemtypes.txt` ładuje `0x6362B0`: rekord 228 bajtów, tablica w `0x97E7D0`, liczba w `0x97E7D4`. W rekordzie `bodyloc1` jest na `+10`, a `bodyloc2` na `+11` (bajty, `0xFF` = nie da się założyć). Rekord `items.txt` (424 bajty, tablica `0x97EA04`, liczba `0x97EA00`) wskazuje swój typ słowem na `+286`, a drugi typ słowem na `+288`; kod przedmiotu jest na `+128`, a nazwa pliku animacji upuszczenia na `+0` (stąd łatwo pomylić początek rekordu). Dzięki temu mod sam wylicza miejsce, w które trafia broń albo zbroja, i zakłada ją pakietami `0x19` (podniesienie z plecaka) i `0x1A` (założenie). Pakiet `0x20` (`0x465FD0(32, id, x, y)`) obsługuje tylko przedmioty z flagą `useable`, czyli mikstury, zwoje i książki.
+
+### Menu NPC (`.\UI\dialog.cpp`)
+
+Menu rozmowy to zwykłe okno dialogowe tworzone przez `0x4A63A0`; lista otwartych okien zaczyna się w `0x7B7494`, a `0x7B7498` mówi, że jakieś jest otwarte. Wskaźniki na aktywne menu NPC leżą w `0x7B739F`, `0x7B73A3`, `0x7B73A7`, `0x7B73AB`, `0x7B73AF`, `0x7B73B3`, `0x7B73B7` i `0x7B73BB`.
+
+| Offset w oknie | Znaczenie |
+| --- | --- |
+| `+0x44` | zaznaczona pozycja (`0x4A6800` ją ustawia) |
+| `+0x4C` | liczba pozycji do wyboru |
+| `+0x50` | liczba pozycji |
+| `+0x68 + 0x110 * i` | tekst pozycji (wide) |
+| `+0x170 + 0x110 * i` | funkcja wywoływana po wyborze |
+| `+0x174 + 0x110 * i` | pozycja jest do wyboru |
+
+Enter w grze obsługuje `0x4A5E80`: wywołuje funkcję zaznaczonej pozycji, a gdy ta zwróci 1, woła `0x440D00`. Samo okno reaguje tylko na mysz, więc mod przesuwa `+0x44` i wywołuje funkcję pozycji tak samo jak gra.
+
+### Dziennik zadań (`.\UI\QuestLog.cpp`)
+
+| Adres | Znaczenie |
+| --- | --- |
+| `0x492360` | `fastcall(this)` - otwiera i zamyka dziennik (gra woła z ecx = 0) |
+| `0x4914F0` | `stdcall(zakładka, reset)` - ładuje zakładkę aktu |
+| `0x7B58D8` | stan dziennika, 2 = otwarty |
+| `0x7B6895` | wybrana zakładka aktu (0-4) |
+| `0x7B59E9` | sześć wpisów po 618 bajtów, budowanych przy każdym rysowaniu: +0 wpis widoczny, +1 id zadania, +5 id nazwy, +7 tekst stanu (wide), +613 stan |
+| `0x48FC50` | `usercall(bufor@esi)` - wypełnia wpis dla zadania |
+| `0x4A16D0` | rekord zadań gracza, `0x65ADD0` (`stdcall(rekord, zadanie, flaga)`) czyta flagę |
+
+### Konfiguracja sterowania
+
+Ekran rysuje `0x493600` (UI var 11), a `0x492750` wybiera tablicę akcji zależnie od dodatku.
+
+| Adres | Znaczenie |
+| --- | --- |
+| `0x71F78C` | wskaźnik na listę akcji, rekord 10 bajtów: +0 id akcji, +4 id nazwy; akcja 57 to nagłówek |
+| `0x7B68B4` | liczba wierszy (51 bez dodatku, 62 z dodatkiem), widocznych 15 |
+| `0x7B68EC` | pierwszy rysowany wiersz, `0x7B68F0` wiersz zaznaczony |
+| `0x71F7E0` | wybrana kolumna: 1 klawisz główny, 0 zapasowy |
+| `0x7B68F8` | gra czeka na nowy klawisz |
+| `0x457340` | `fastcall(id akcji, kolumna)` - nazwa przypisanego klawisza |
+| `0x457190` | `(id akcji, kolumna, kod klawisza, &id komunikatu)` - zapisuje przypisanie |
+| `0x494090` | zaczyna przypisywanie, `0x494110` (`stdcall(zapisz)`) je kończy |
+| `0x71F790` | trzy przyciski na dole, rekord 26 bajtów: +0 id nazwy, +2 funkcja; `0x7B68F4` to wybrany |
 
 ```
 Inventory:  +00 0x01020304, +08 owner, +0C first item, +10 last item, +14 grids, +18 grid count,

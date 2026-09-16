@@ -2,6 +2,7 @@
 
 #include "Addresses.hpp"
 #include "AudioCue.hpp"
+#include "Controls.hpp"
 #include "D2Game.hpp"
 #include "EventLog.hpp"
 #include "FrontendHooks.hpp"
@@ -13,6 +14,7 @@
 #include "MenuAccess.hpp"
 #include "Panels.hpp"
 #include "Pathfinder.hpp"
+#include "QuestLog.hpp"
 #include "ScreenReader.hpp"
 #include "SkillTree.hpp"
 
@@ -242,6 +244,12 @@ constexpr int NpcMenuOffset_ItemCount = 0x50;
 constexpr int NpcMenuOffset_ItemText = 0x68;
 constexpr int NpcMenuItemStride = 0x110;
 constexpr int NpcMenuItemOffset_Selectable = 0x174;
+// Dialogs (.\UI\dialog.cpp, created by 0x4A63A0) keep one action function per
+// entry. Enter in the game (0x4A5E80) calls the function of the entry at +0x44
+// and, when it returns 1, 0x440D00. The mod does the same, because the dialog
+// itself only reacts to the mouse.
+constexpr int NpcMenuItemOffset_Action = 0x170;
+constexpr uintptr_t Game_DialogItemActivated = 0x440D00;
 constexpr int NpcMenuMaxItems = 10;
 constexpr int NpcMenuMaxTextChars = 119;
 constexpr uintptr_t Global_NpcInteractionUnitClassId = 0x7B736D;
@@ -674,6 +682,16 @@ bool ReadGlobalInt(uintptr_t va, int &out)
     return game::Read(game::Absolute(va), out);
 }
 
+// Entries without an action function (headings) cannot be chosen.
+bool NpcMenuItemSelectable(uintptr_t menu, int index)
+{
+    int value = 0;
+    return game::Read(menu + static_cast<uintptr_t>(NpcMenuItemOffset_Selectable +
+                                                    NpcMenuItemStride * index),
+                      value) &&
+           value != 0;
+}
+
 bool ReadNpcMenuSnapshotFromPointer(uintptr_t menu, NpcMenuSnapshot &snapshot)
 {
     snapshot = NpcMenuSnapshot{};
@@ -700,13 +718,7 @@ bool ReadNpcMenuSnapshotFromPointer(uintptr_t menu, NpcMenuSnapshot &snapshot)
         labels.push_back(NormalizeUiText(game::ReadWideString(textAddress, NpcMenuMaxTextChars)));
     }
 
-    const auto selectable = [menu](int index) {
-        int value = 0;
-        return game::Read(menu + static_cast<uintptr_t>(NpcMenuItemOffset_Selectable +
-                                                        NpcMenuItemStride * index),
-                          value) &&
-               value != 0;
-    };
+    const auto selectable = [menu](int index) { return NpcMenuItemSelectable(menu, index); };
 
     const auto validSelection = [&]() {
         return snapshot.selectedIndex >= 0 && snapshot.selectedIndex < snapshot.itemCount &&
@@ -755,6 +767,98 @@ bool ReadNpcMenuSnapshot(NpcMenuSnapshot &snapshot)
     return false;
 }
 
+std::atomic<bool> g_npcMenuOpenForKeys = false;
+
+// Moves the highlight to the previous or next choosable entry. The next poll
+// reads the new entry out.
+bool MoveNpcMenuSelection(int delta)
+{
+    NpcMenuSnapshot menu;
+    if (!ReadNpcMenuSnapshot(menu) || menu.itemCount <= 0)
+        return false;
+
+    int index = menu.selectedIndex;
+    for (int step = 0; step < menu.itemCount; ++step)
+    {
+        index += delta;
+        if (index < 0)
+            index = menu.itemCount - 1;
+        else if (index >= menu.itemCount)
+            index = 0;
+        if (NpcMenuItemSelectable(menu.menu, index))
+            return game::Write(menu.menu + NpcMenuOffset_SelectedIndex, index);
+    }
+    return false;
+}
+
+using NpcMenuAction_t = int(__cdecl *)();
+
+int CallNpcMenuAction(uintptr_t action)
+{
+    __try
+    {
+        return reinterpret_cast<NpcMenuAction_t>(action)();
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        return 0;
+    }
+}
+
+void CallDialogItemActivated()
+{
+    __try
+    {
+        reinterpret_cast<void(__cdecl *)()>(game::Absolute(Game_DialogItemActivated))();
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+    }
+}
+
+bool ActivateNpcMenuSelection()
+{
+    NpcMenuSnapshot menu;
+    if (!ReadNpcMenuSnapshot(menu) || menu.selectedIndex < 0 || menu.selectedIndex >= menu.itemCount ||
+        !NpcMenuItemSelectable(menu.menu, menu.selectedIndex))
+        return false;
+
+    const uintptr_t action = game::ReadPtr(menu.menu + NpcMenuItemOffset_Action +
+                                           static_cast<uintptr_t>(NpcMenuItemStride * menu.selectedIndex));
+    if (action == 0)
+        return false;
+
+    // The choice usually replaces or closes the menu; let the next poll announce
+    // whatever comes up.
+    g_lastNpcMenu = 0;
+    g_lastNpcMenuSelected = -2;
+    g_lastNpcMenuLabel.clear();
+    if (CallNpcMenuAction(action) == 1)
+        CallDialogItemActivated();
+    return true;
+}
+
+// The NPC menu only reacts to the mouse, so the mod drives it from the keyboard.
+bool HandleNpcMenuKey(DWORD virtualKey)
+{
+    if (!g_npcMenuOpenForKeys.load())
+        return false;
+
+    switch (virtualKey)
+    {
+    case VK_UP:
+    case VK_NUMPAD8:
+        return MoveNpcMenuSelection(-1);
+    case VK_DOWN:
+    case VK_NUMPAD2:
+        return MoveNpcMenuSelection(1);
+    case VK_RETURN:
+        return ActivateNpcMenuSelection();
+    default:
+        return false;
+    }
+}
+
 bool IsGameplayDialogActiveInternal()
 {
     NpcMenuSnapshot menu;
@@ -787,19 +891,24 @@ void PollNpcDialogAccessibility()
             stream << menu.selectedLabel << L". " << (menu.selectedIndex + 1) << Tr(L" z ", L" of ")
                    << menu.itemCount << L".";
             if (opened)
-                stream << Tr(L" Strzałki zmieniają opcję, Enter wybiera, Escape zamyka.",
-                             L" Arrows change the option, Enter selects, Escape closes.");
+                stream << Tr(L" Strzałki w górę i w dół zmieniają opcję, Enter wybiera, Escape zamyka.",
+                             L" Up and down arrows change the option, Enter selects, Escape closes.");
             Say(stream.str());
         }
+        g_npcMenuOpenForKeys = true;
         g_lastNpcMenu = menu.menu;
         g_lastNpcMenuSelected = menu.selectedIndex;
         g_lastNpcMenuLabel = menu.selectedLabel;
     }
-    else if (g_lastNpcMenu != 0)
+    else
     {
-        g_lastNpcMenu = 0;
-        g_lastNpcMenuSelected = -2;
-        g_lastNpcMenuLabel.clear();
+        g_npcMenuOpenForKeys = false;
+        if (g_lastNpcMenu != 0)
+        {
+            g_lastNpcMenu = 0;
+            g_lastNpcMenuSelected = -2;
+            g_lastNpcMenuLabel.clear();
+        }
     }
 
     int dialogActive = 0;
@@ -1689,13 +1798,20 @@ void SpeakHelp()
            L"Control plus Home czyści wybrany cel. E wykonuje interakcję z celem, F atakuje potwora. "
            L"Z czyta procent życia, Shift plus Z procent many, X procent doświadczenia do następnego poziomu. "
            L"C otwiera kartę postaci, I ekwipunek. W panelu strzałki wybierają pole, Enter podnosi lub odkłada "
-           L"przedmiot albo dodaje punkt atrybutu, Shift plus Enter używa przedmiotu albo rozdaje wszystkie punkty, "
+           L"przedmiot albo dodaje punkt atrybutu, Shift plus Enter używa przedmiotu, broń i zbroję od razu "
+           L"zakłada, albo rozdaje wszystkie punkty, "
            L"Spacja czyta opis przedmiotu. Aby założyć przedmiot, podnieś go Enterem, przejdź strzałką w górę do "
            L"założonych przedmiotów, wybierz miejsce i naciśnij Enter. "
            L"Tab przełącza między kartą a ekwipunkiem. "
            L"T otwiera drzewko umiejętności: strzałki w górę i w dół przechodzą po drzewku, w prawo rozwija zakładkę, "
            L"w lewo zwija, Enter dodaje punkt umiejętności, Spacja czyta opis. "
+           L"Q otwiera dziennik zadań: strzałki w górę i w dół wybierają zadanie, w lewo i w prawo zmieniają akt, "
+           L"Spacja czyta zadanie ponownie, Q zamyka dziennik. "
+           L"W rozmowie z postacią niezależną strzałki w górę i w dół wybierają odpowiedź, Enter ją zatwierdza, "
+           L"Escape zamyka rozmowę. "
            L"Escape otwiera menu gry: strzałki wybierają, Enter zatwierdza, w lewo i w prawo zmieniają ustawienie. "
+           L"W konfiguracji sterowania strzałki w górę i w dół wybierają akcję, w lewo i w prawo klawisz główny "
+           L"albo zapasowy, Enter przypisuje nowy klawisz, Tab przechodzi do przycisków. "
            L"G albo F2 skanuje poziom. K czyta współrzędne, L czyta lokację, F1 pomoc.",
            L"Controls follow Diablo Access. Arrows move the character, two arrows together move diagonally. "
            L"Page Down and Page Up select the next and previous target. Control plus Page Down or Page Up changes "
@@ -1703,13 +1819,20 @@ void SpeakHelp()
            L"stop. Control plus Home clears the target. E interacts with the target, F attacks a monster. "
            L"Z reads life percentage, Shift plus Z mana percentage, X experience missing to the next level. "
            L"C opens the character sheet, I the inventory. In a panel arrows select a field, Enter picks up or "
-           L"places an item or adds a stat point, Shift plus Enter uses an item or spends all points, "
+           L"places an item or adds a stat point, Shift plus Enter uses an item, equips weapons and armor, or "
+           L"spends all points, "
            L"Space reads the item description. To equip an item, pick it up with Enter, go up to the equipped "
            L"items, choose the slot and press Enter. "
            L"Tab switches between the sheet and the inventory. "
            L"T opens the skill tree: up and down arrows move through the tree, right expands a tab, left collapses "
            L"it, Enter adds a skill point, Space reads the description. "
+           L"Q opens the quest log: up and down arrows choose a quest, left and right change the act, "
+           L"Space reads the quest again, Q closes the log. "
+           L"In a conversation with an NPC up and down arrows choose the answer, Enter selects it, Escape closes "
+           L"the conversation. "
            L"Escape opens the game menu: arrows select, Enter confirms, left and right change a setting. "
+           L"In the controls configuration up and down arrows choose an action, left and right the primary or "
+           L"secondary key, Enter assigns a new key, Tab moves to the buttons. "
            L"G or F2 scans the level. K reads coordinates, L reads the location, F1 help."));
 }
 
@@ -2214,6 +2337,8 @@ void ResetGameplayState()
     g_lifeChecked = false;
     panels::ResetPanels();
     skilltree::ResetSkillTree();
+    questlog::ResetQuestLog();
+    controls::ResetControls();
     gamemenu::ResetGameMenu();
     g_levelMap.Reset();
     g_tracker = TrackerState{};
@@ -2267,6 +2392,14 @@ void ProcessKeyEvent(const game::UnitInfo &player, const KeyEvent &event)
         gamemenu::HandleGameMenuKey(event.virtualKey, event.ctrl, event.shift);
         return;
     }
+    if (controls::HandleControlsKey(event.virtualKey, event.ctrl, event.shift))
+        return;
+    if (questlog::HandleQuestLogKey(event.virtualKey, event.ctrl, event.shift))
+        return;
+    // The NPC menu takes the arrows, so they no longer walk the character while
+    // a choice is waiting.
+    if (HandleNpcMenuKey(event.virtualKey))
+        return;
     if (skilltree::HandleSkillTreeKey(player.unit, event.virtualKey, event.ctrl, event.shift))
         return;
     if (panels::HandlePanelKey(player.unit, player.position,
@@ -2303,6 +2436,9 @@ void ProcessKeyEvent(const game::UnitInfo &player, const KeyEvent &event)
         break;
     case 'L':
         SpeakLocation();
+        break;
+    case 'Q':
+        questlog::ToggleQuestLog();
         break;
     case VK_PRIOR:
         if (event.ctrl)
@@ -2408,6 +2544,8 @@ void GameTick()
 
     RunPendingJobs();
     gamemenu::UpdateGameMenu();
+    controls::UpdateControls();
+    questlog::UpdateQuestLog();
     skilltree::UpdateSkillTree(player.unit);
     panels::UpdatePanels(player.unit, player.position);
     PollNpcDialogAccessibility();
@@ -2519,6 +2657,11 @@ bool IsGameplayDialogActive()
     if (!g_gameActive.load())
         return false;
     return IsGameplayDialogActiveInternal();
+}
+
+bool IsNpcMenuOpenForKeys()
+{
+    return g_gameActive.load() && g_npcMenuOpenForKeys.load();
 }
 
 void NotifyGameplayVirtualKeyState(DWORD virtualKey, bool isDown)
@@ -2887,18 +3030,24 @@ bool IsGameplayKey(DWORD virtualKey)
 
 bool IsGameplayKeyCaptured(DWORD virtualKey)
 {
+    // While the controls screen waits for the new key, every key belongs to the
+    // game, otherwise the key could never be assigned.
+    if (controls::IsWaitingForKeyBinding())
+        return false;
+
     if (virtualKey == VK_F1 || virtualKey == VK_F2 || virtualKey == VK_PRIOR || virtualKey == VK_NEXT ||
         virtualKey == VK_HOME || virtualKey == VK_UP || virtualKey == VK_DOWN || virtualKey == VK_LEFT ||
         virtualKey == VK_RIGHT || virtualKey == 'E' || virtualKey == 'F' || virtualKey == 'G' ||
-        virtualKey == 'H' || virtualKey == 'K' || virtualKey == 'L' || virtualKey == 'Z' || virtualKey == 'X' ||
-        virtualKey == VK_CLEAR || (virtualKey >= VK_NUMPAD1 && virtualKey <= VK_NUMPAD9))
+        virtualKey == 'H' || virtualKey == 'K' || virtualKey == 'L' || virtualKey == 'Q' || virtualKey == 'Z' ||
+        virtualKey == 'X' || virtualKey == VK_CLEAR || (virtualKey >= VK_NUMPAD1 && virtualKey <= VK_NUMPAD9))
         return true;
 
     // Enter, Space, Tab and End stay with the game unless one of the accessible
     // panels or menus is open.
     if (virtualKey == VK_RETURN || virtualKey == VK_SPACE || virtualKey == VK_TAB || virtualKey == VK_END)
         return g_gameActive.load() && (panels::IsPanelOpenForKeys() || skilltree::IsSkillTreeOpenForKeys() ||
-                                       gamemenu::IsGameMenuOpenForKeys());
+                                       gamemenu::IsGameMenuOpenForKeys() || questlog::IsQuestLogOpenForKeys() ||
+                                       controls::IsControlsScreenOpenForKeys() || IsNpcMenuOpenForKeys());
     return false;
 }
 

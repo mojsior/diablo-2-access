@@ -146,13 +146,17 @@ The inventory has three areas: equipped items, the backpack (10 columns by 4 row
 
 - Arrows: move between slots. Up from the top backpack row goes to equipped items, and down from the bottom row goes to the belt.
 - Enter: pick an item up onto the cursor, place it, equip it or swap it.
-- Shift + Enter: use an item, for example drink a potion.
+- Shift + Enter: use an item, for example drink a potion, or equip a weapon or a piece of armor straight from the backpack.
 - Space: the full item description, the same as the game's tooltip. It includes defense or damage, durability, requirements and magic properties. It works in the backpack and on equipped items while nothing is held on the cursor.
 - Tab: switch to the character sheet, if it is open.
 
 The mod confirms actions: "Holding:", "Placed.", "Equipped.", "Used:" or "Cannot do that.".
 
 ### How to equip an item
+
+The short way: select the item in the backpack and press Shift + Enter. The game puts it in the slot it belongs to and the mod says "Equipped:" and its name. Rings, amulets and second weapons still go the long way, because the game picks the slot itself.
+
+The long way, which lets you choose the slot:
 
 1. In the backpack, select the item and press Enter. You hear "Holding:" and its name.
 2. Press the up arrow on the top backpack row to reach the equipped items.
@@ -202,7 +206,17 @@ Escape during play opens the menu: options, save and exit game, return to game.
 - Left and right arrows: change a setting or move a slider.
 - Escape: close the whole menu and return to the game. The "Previous menu" entry goes back one level.
 
-The options sub-menu holds sound, video and automap options. The mod reads the setting name, its value (for example "on" or "60%") and its position in the list. The key configuration screen is not accessible yet.
+The options sub-menu holds sound, video, automap and control options. The mod reads the setting name, its value (for example "on" or "60%") and its position in the list.
+
+### Configure controls
+
+"Configure controls" opens the list of every action of the game together with its keys.
+
+- Up and down arrows: choose an action. The mod reads its name, the primary and the secondary key, and the position in the list. Headings are skipped.
+- Left and right arrows: switch between the primary and the secondary key.
+- Enter: assign a new key. The mod says "Press the new key"; press the key you want, or Escape to cancel. Afterwards the mod reads the action with its new key.
+- Tab: move to the buttons at the bottom (default settings, accept, cancel) and back to the list. There the arrows choose a button and Enter presses it.
+- Space: read the selected action again.
 
 ## Death and corpses
 
@@ -212,9 +226,22 @@ The options sub-menu holds sound, video and automap options. The mod reads the s
 - The corpse stays in town even after leaving and reloading, so the equipment has to be taken back. The corpse is in the "players" category as "Corpse:" followed by the character name. Select it, walk there (Shift + Home) and press E.
 - If a loaded character has zero life, the mod warns you right after entering the game. Talk to the healer in town (Akara in act one) to restore full life.
 
+## Quest log (Q)
+
+Q opens and closes the quest log. The mod reads the act and the selected quest with the text the log shows for it, for example that the quest is still waiting or already done.
+
+- Up and down arrows: previous or next quest of the act.
+- Left and right arrows: previous or next act. Acts you have not reached yet hold no quests.
+- Space: read the selected quest again.
+- Q: close the log.
+
 ## Talking to NPCs
 
-When an NPC menu opens, the mod reads the mode and the selected option. Arrows change the option, Enter selects it, Escape closes the menu.
+When an NPC menu opens, the mod reads the mode and the selected option.
+
+- Up and down arrows: previous or next option. While the menu is open the arrows no longer move the character.
+- Enter: choose the option.
+- Escape: close the menu.
 
 ## Mod files
 
