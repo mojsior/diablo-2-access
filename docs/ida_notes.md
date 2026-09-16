@@ -126,6 +126,8 @@ PlayerData:  +00 char name[16]
 
 Jednostki istnieją dla klienta dopiero wtedy, gdy gra wczyta pokój, w którym stoją, więc mod nie zobaczy potwora dalej niż sama gra. Pomiar na Krwawym Wrzosowisku (84 pokoje, wszystkie z kolizją): załadowane jednostki typu potwór sięgały do 112 podpól, czyli około 22 kafli, podczas gdy dźwięki otoczenia mają promień 12 kafli. Tracker i dźwięki korzystają z tej samej funkcji `CollectLiveTargets`, która obchodzi wszystkie pokoje poziomu bez żadnego limitu odległości — nie ma tu czego zwiększać.
 
+Potwierdza to eksperyment na Krwawym Wrzosowisku: na starcie gra miała w pamięci 11 jednostek typu potwór, po przejściu trzydziestu kroków na północ 22 (19 zupełnie nowych, 8 zniknęło), a po powrocie na to samo pole 20, z czego 8 miało te same identyfikatory co na początku, a 3 nie wróciły. Potwory powstają więc dopiero przy zbliżeniu się i zwykle zostają w pamięci, przez co ich liczba rośnie w miarę odsłaniania terenu. Nie ma listy wszystkich potworów poziomu, którą można by odczytać z wyprzedzeniem. Po stronie serwera `.\MONSTER\MonsterRegion.cpp` (`0x541EA0`) trzyma tylko jedną strukturę na poziom, wypełnioną z `levels.txt`, czyli paletę typów potworów, a nie ich rozmieszczenie.
+
 Presety z mapy nie zastąpią żywych jednostek: na tym samym poziomie `LevelMap` znalazł 502 presety obiektów, 1 kafel przejścia i tylko 2 presety potworów, bo zwykłe potwory są losowane przy wczytywaniu pokoju. Dlatego zamiast dalszego „radaru” mod sam zapowiada potwory, gdy pojawią się w zasięgu gry.
 
 ### Wybór umiejętności
