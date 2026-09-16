@@ -242,8 +242,12 @@ constexpr int DropAnnounceDistance = 20;
 // waiting for the player to press Page Down. In subtiles, 5 per tile.
 constexpr int MonsterAnnounceDistance = 120;
 constexpr int MaxAnnouncedMonsters = 3;
+// Exploration: tiles within this radius count as seen, which is close to how far
+// the character really takes in, and the grid is marked a few times a second.
+constexpr int ExplorationMarkRadiusTiles = 6;
+constexpr DWORD64 ExplorationMarkIntervalMs = 250;
 constexpr int PresetLiveMatchDistance = 5;
-constexpr const wchar_t *GameplayVersion = L"1.3 beta";
+constexpr const wchar_t *GameplayVersion = L"1.4 beta";
 
 constexpr int NpcMenuOffset_SelectedIndex = 0x44;
 constexpr int NpcMenuOffset_SelectableCount = 0x4C;
@@ -645,6 +649,10 @@ std::vector<UsedObject> g_usedObjects;
 std::unordered_set<std::uint32_t> g_knownGroundItems;
 bool g_groundItemsSeeded = false;
 std::unordered_set<std::uint32_t> g_knownMonsters;
+// One entry per tile of the level, true once the character has been near it.
+std::vector<bool> g_visitedTiles;
+game::Rect g_visitedBounds;
+DWORD64 g_lastVisitMark = 0;
 DWORD64 g_lastLiveRefresh = 0;
 DWORD64 g_lastCueTick = 0;
 std::uint64_t g_lastInteractCueKey = 0;
@@ -1824,6 +1832,160 @@ Point ManualStepOrigin(const game::UnitInfo &player)
     return player.position;
 }
 
+// ---------------------------------------------------------------------------
+// Exploration (Diablo Access SpeakNearestUnexploredTileKeyPressed)
+// ---------------------------------------------------------------------------
+
+void ResetExploration()
+{
+    g_visitedTiles.clear();
+    g_visitedBounds = game::Rect{};
+    g_lastVisitMark = 0;
+}
+
+// The level map is measured in subtiles; the exploration grid holds one entry
+// per tile, so it stays small even on wide outdoor levels.
+void EnsureExplorationGrid()
+{
+    const game::Rect &bounds = g_levelMap.Bounds();
+    if (bounds.w <= 0 || bounds.h <= 0)
+        return;
+
+    const game::Rect tiles{bounds.x / ManualStepSubtiles, bounds.y / ManualStepSubtiles,
+                           bounds.w / ManualStepSubtiles + 2, bounds.h / ManualStepSubtiles + 2};
+    if (!g_visitedTiles.empty() && tiles.x == g_visitedBounds.x && tiles.y == g_visitedBounds.y &&
+        tiles.w == g_visitedBounds.w && tiles.h == g_visitedBounds.h)
+        return;
+
+    g_visitedBounds = tiles;
+    g_visitedTiles.assign(static_cast<size_t>(tiles.w) * static_cast<size_t>(tiles.h), false);
+}
+
+bool ExplorationIndexOfTile(int tileX, int tileY, size_t &index)
+{
+    const int x = tileX - g_visitedBounds.x;
+    const int y = tileY - g_visitedBounds.y;
+    if (g_visitedTiles.empty() || x < 0 || y < 0 || x >= g_visitedBounds.w || y >= g_visitedBounds.h)
+        return false;
+    index = static_cast<size_t>(y) * static_cast<size_t>(g_visitedBounds.w) + static_cast<size_t>(x);
+    return index < g_visitedTiles.size();
+}
+
+Point TileCentre(int tileX, int tileY)
+{
+    return Point{tileX * ManualStepSubtiles + ManualStepSubtiles / 2,
+                 tileY * ManualStepSubtiles + ManualStepSubtiles / 2};
+}
+
+void UpdateExploration(const game::UnitInfo &player)
+{
+    if (!g_levelMap.Ready())
+        return;
+    EnsureExplorationGrid();
+
+    const DWORD64 now = GetTickCount64();
+    if (now - g_lastVisitMark < ExplorationMarkIntervalMs)
+        return;
+    g_lastVisitMark = now;
+
+    const int centreX = player.position.x / ManualStepSubtiles;
+    const int centreY = player.position.y / ManualStepSubtiles;
+    for (int dy = -ExplorationMarkRadiusTiles; dy <= ExplorationMarkRadiusTiles; ++dy)
+    {
+        for (int dx = -ExplorationMarkRadiusTiles; dx <= ExplorationMarkRadiusTiles; ++dx)
+        {
+            size_t index = 0;
+            if (ExplorationIndexOfTile(centreX + dx, centreY + dy, index))
+                g_visitedTiles[index] = true;
+        }
+    }
+}
+
+// Breadth first over walkable tiles, so the first hit is the closest place the
+// character can actually get to, not merely the closest on the map.
+bool FindNearestUnexploredTile(Point start, Point &result)
+{
+    EnsureExplorationGrid();
+    if (g_visitedTiles.empty())
+        return false;
+
+    const auto mask = static_cast<std::uint16_t>(game::CollideMaskPlayerPath & ~game::CollideDoor);
+    std::vector<bool> queued(g_visitedTiles.size(), false);
+    std::deque<Point> queue;
+
+    const auto push = [&](int tileX, int tileY) {
+        size_t index = 0;
+        if (!ExplorationIndexOfTile(tileX, tileY, index) || queued[index])
+            return;
+        const Point centre = TileCentre(tileX, tileY);
+        if (!g_levelMap.IsStandable(centre.x, centre.y, mask))
+            return;
+        queued[index] = true;
+        queue.push_back(Point{tileX, tileY});
+    };
+
+    push(start.x / ManualStepSubtiles, start.y / ManualStepSubtiles);
+    while (!queue.empty())
+    {
+        const Point tile = queue.front();
+        queue.pop_front();
+
+        size_t index = 0;
+        if (ExplorationIndexOfTile(tile.x, tile.y, index) && !g_visitedTiles[index])
+        {
+            result = TileCentre(tile.x, tile.y);
+            return true;
+        }
+
+        push(tile.x + 1, tile.y);
+        push(tile.x - 1, tile.y);
+        push(tile.x, tile.y + 1);
+        push(tile.x, tile.y - 1);
+    }
+    return false;
+}
+
+void SpeakNearestUnexplored(const game::UnitInfo &player)
+{
+    StopAutoWalk();
+    if (!g_levelMap.Ready())
+    {
+        Say(Tr(L"Mapa poziomu jest jeszcze wczytywana.", L"The level map is still loading."));
+        return;
+    }
+
+    RefreshLiveCollision(true);
+    const Point origin = ManualStepOrigin(player);
+    Point goal;
+    if (!FindNearestUnexploredTile(origin, goal))
+    {
+        Say(Tr(L"Nie znaleziono nieodkrytych obszarów.", L"No unexplored areas found."));
+        return;
+    }
+
+    const StepPathResult path = FindStepPath(g_levelMap, origin, goal, ManualStepSubtiles,
+                                             ManualStepSubtiles - 1, game::CollideMaskPlayerPath);
+    std::wstring message = TrS(L"Najbliższe nieodkryte miejsce: ", L"Nearest unexplored space: ");
+    if (path.found && !path.nodes.empty())
+    {
+        message += DescribePath(origin, path.nodes) + L".";
+        if (path.throughDoor)
+            message += Tr(L" Po drodze są zamknięte drzwi, otwórz je klawiszem E.",
+                          L" A closed door is on the way, open it with E.");
+    }
+    else
+    {
+        // No step path: give the plain direction and distance, like Diablo Access.
+        message += std::wstring(DirectionName(goal.x - origin.x, goal.y - origin.y)) + L", " +
+                   std::to_wstring(game::ChebyshevDistance(origin, goal) / ManualStepSubtiles) +
+                   Tr(L" kroków.", L" steps.");
+        if (!path.nodes.empty())
+            message += TrS(L" Najbliżej dojdziesz tak: ", L" The closest you can get: ") +
+                       DescribePath(origin, path.nodes) + L".";
+    }
+    Say(message);
+}
+
 void NavigateKeyPressed(const game::UnitInfo &player, bool clearTarget)
 {
     StopAutoWalk();
@@ -1879,6 +2041,7 @@ void SpeakHelp()
            L"Page Down i Page Up wybierają następny i poprzedni cel. Control plus Page Down lub Page Up zmienia kategorię. "
            L"Home czyta drogę do celu. Shift plus Home idzie automatycznie do celu, ponowne naciśnięcie zatrzymuje. "
            L"Control plus Home czyści wybrany cel. E wykonuje interakcję z celem, F atakuje potwora. "
+           L"Ukośnik czyta drogę do najbliższego nieodkrytego miejsca, tak samo jak Home czyta drogę do celu. "
            L"S wybiera następną umiejętność bojową, Shift plus S poprzednią, Control plus S wraca do zwykłego "
            L"ataku. Wybrana umiejętność trafia na lewą rękę, więc F atakuje właśnie nią. "
            L"Z czyta procent życia, Shift plus Z procent many, X procent doświadczenia do następnego poziomu. "
@@ -1902,6 +2065,7 @@ void SpeakHelp()
            L"Page Down and Page Up select the next and previous target. Control plus Page Down or Page Up changes "
            L"the category. Home reads the path to the target. Shift plus Home walks to the target, press again to "
            L"stop. Control plus Home clears the target. E interacts with the target, F attacks a monster. "
+           L"The slash key reads the way to the nearest unexplored space, the way Home reads the way to a target. "
            L"S chooses the next combat skill, Shift plus S the previous one, Control plus S goes back to the "
            L"normal attack. The chosen skill goes into the left hand, so F attacks with it. "
            L"Z reads life percentage, Shift plus Z mana percentage, X experience missing to the next level. "
@@ -2473,6 +2637,7 @@ void ResetGameplayState()
     g_knownGroundItems.clear();
     g_groundItemsSeeded = false;
     g_knownMonsters.clear();
+    ResetExploration();
     g_lastLiveRefresh = 0;
     g_lastCueTick = 0;
     g_lastInteractCueKey = 0;
@@ -2500,6 +2665,7 @@ void OnLevelChanged()
     g_knownGroundItems.clear();
     g_groundItemsSeeded = false;
     g_knownMonsters.clear();
+    ResetExploration();
     g_lastInteractCueKey = 0;
 
     std::wstringstream log;
@@ -2590,6 +2756,9 @@ void ProcessKeyEvent(const game::UnitInfo &player, const KeyEvent &event)
         break;
     case 'E':
         InteractKeyPressed(player);
+        break;
+    case VK_OEM_2: // the slash key
+        SpeakNearestUnexplored(player);
         break;
     case 'S':
         if (event.ctrl)
@@ -2682,6 +2851,7 @@ void GameTick()
     skilltree::UpdateSkillTree(player.unit);
     panels::UpdatePanels(player.unit, player.position);
     PollNpcDialogAccessibility();
+    UpdateExploration(player);
     UpdateManualMovement(player);
     UpdateAutoWalk(player);
     UpdateCues(player);
@@ -3173,7 +3343,8 @@ bool IsGameplayKeyCaptured(DWORD virtualKey)
         virtualKey == VK_RIGHT || virtualKey == 'E' || virtualKey == 'F' || virtualKey == 'G' ||
         virtualKey == 'H' || virtualKey == 'K' || virtualKey == 'L' || virtualKey == 'Q' || virtualKey == 'S' ||
         virtualKey == 'Z' ||
-        virtualKey == 'X' || virtualKey == VK_CLEAR || (virtualKey >= VK_NUMPAD1 && virtualKey <= VK_NUMPAD9))
+        virtualKey == 'X' || virtualKey == VK_OEM_2 || virtualKey == VK_CLEAR ||
+        (virtualKey >= VK_NUMPAD1 && virtualKey <= VK_NUMPAD9))
         return true;
 
     // Enter, Space, Tab and End stay with the game unless one of the accessible

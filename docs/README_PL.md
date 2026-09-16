@@ -119,6 +119,13 @@ Mod dzieli otoczenie na kategorie: przedmioty, skrzynie, drzwi, kapliczki, obiek
 - E: interakcja z celem, na przykład otwarcie skrzyni, rozmowa z NPC, podniesienie przedmiotu czy użycie waypointu.
 - F: atak na najbliższego potwora — zwykły albo wybraną umiejętnością bojową.
 - S: następna umiejętność bojowa. Shift + S: poprzednia. Control + S: powrót do zwykłego ataku.
+- Ukośnik (klawisz ze znakiem `/`): droga do najbliższego nieodkrytego miejsca.
+
+### Zwiedzanie lokacji (ukośnik)
+
+Mod zapamiętuje, w których miejscach postać już była. Naciśnięcie ukośnika podaje drogę do najbliższego miejsca, którego jeszcze nie zwiedziłeś — w krokach, dokładnie tak samo jak Home podaje drogę do celu, na przykład „Najbliższe nieodkryte miejsce: północ 6, wschód 3”. Gdy drogi nie da się wyznaczyć, mod poda sam kierunek i odległość w krokach.
+
+Szukanie idzie po polach, po których da się przejść, więc podane miejsce zawsze jest osiągalne, a nie odcięte ścianą. Działa tak samo w lochach i na otwartych terenach, jak Krwawe Wrzosowisko. Gdy cała okolica jest już zwiedzona, usłyszysz „Nie znaleziono nieodkrytych obszarów” — wtedy przejdź kawałek dalej i naciśnij ukośnik ponownie. Pamięć zwiedzonych miejsc czyści się przy każdej zmianie lokacji.
 
 ### Umiejętności bojowe (S)
 

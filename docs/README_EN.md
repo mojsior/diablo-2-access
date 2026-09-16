@@ -119,6 +119,13 @@ The mod sorts the world into categories: items, chests, doors, shrines, objects,
 - E: interact with the target, for example open a chest, talk to an NPC, pick up an item or use a waypoint.
 - F: attack the nearest monster, with the weapon or with the chosen combat skill.
 - S: next combat skill. Shift + S: previous one. Control + S: back to the normal attack.
+- Slash (the `/` key): the way to the nearest unexplored space.
+
+### Exploring an area (slash)
+
+The mod remembers where the character has already been. Slash reads the way to the nearest place you have not explored yet, counted in steps exactly as Home counts the way to a target, for example "Nearest unexplored space: north 6, east 3". When no path can be worked out, the mod gives the plain direction and the distance in steps.
+
+The search walks over cells the character can actually cross, so the place it names is always reachable rather than cut off by a wall. It works the same in dungeons and in open areas such as the Blood Moor. When everything around is explored you hear "No unexplored areas found" — walk on a little and press slash again. The record of explored places is cleared whenever you change area.
 
 ### Combat skills (S)
 
