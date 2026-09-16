@@ -130,6 +130,10 @@ When the character knows no skill yet, the mod says "You have no skills to choos
 
 When an item appears near the character, for example from a chest or a monster, the mod says "On the ground:" and its name. These items are in the "items" category.
 
+Monsters are announced the same way: when one shows up nearby, the mod names it at once, for example "Monsters: Fallen, Zombie". For a larger group it names the first three and adds how many others there are. So there is no need to press Page Down to learn that something is coming.
+
+The range is the game's own: monsters only exist once the part of the level they stand in is loaded, which is roughly twenty-odd steps away. The surrounding sounds carry less far, twelve steps, so the mod usually names a monster before you hear it.
+
 ### Surrounding sounds
 
 The sound cues work the same way as in Diablo Access:

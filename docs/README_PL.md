@@ -130,6 +130,10 @@ Gdy postać nie zna jeszcze żadnej umiejętności, mod powie „Nie masz jeszcz
 
 Gdy obok postaci pojawi się przedmiot, na przykład wypadnie ze skrzyni albo z potwora, mod powie „Na ziemi:” i nazwę. Takie przedmioty są w kategorii „przedmioty”.
 
+Tak samo mod sam zgłasza potwory: gdy jakiś pojawi się w pobliżu, od razu poda jego nazwę, na przykład „Potwory: Upadły, Zombie”. Przy większej grupie wymienia trzy pierwsze i dodaje, ile jest pozostałych. Nie trzeba więc naciskać Page Down, żeby się dowiedzieć, że coś nadchodzi.
+
+Zasięg jest taki, jak w samej grze: potwory istnieją dopiero wtedy, gdy wczyta się fragment poziomu, w którym stoją — mniej więcej dwadzieścia kilka kroków od postaci. Dźwięki otoczenia słychać bliżej, w promieniu dwunastu kroków, więc mod zwykle zapowie potwora, zanim go usłyszysz.
+
 ### Dźwięki w otoczeniu
 
 Dźwięki działają tak samo jak w Diablo Access:

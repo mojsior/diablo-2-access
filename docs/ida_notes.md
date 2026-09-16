@@ -122,6 +122,12 @@ PlayerData:  +00 char name[16]
 
 `itemtypes.txt` ładuje `0x6362B0`: rekord 228 bajtów, tablica w `0x97E7D0`, liczba w `0x97E7D4`. W rekordzie `bodyloc1` jest na `+10`, a `bodyloc2` na `+11` (bajty, `0xFF` = nie da się założyć). Rekord `items.txt` (424 bajty, tablica `0x97EA04`, liczba `0x97EA00`) wskazuje swój typ słowem na `+286`, a drugi typ słowem na `+288`; kod przedmiotu jest na `+128`, a nazwa pliku animacji upuszczenia na `+0` (stąd łatwo pomylić początek rekordu). Dzięki temu mod sam wylicza miejsce, w które trafia broń albo zbroja, i zakłada ją pakietami `0x19` (podniesienie z plecaka) i `0x1A` (założenie). Pakiet `0x20` (`0x465FD0(32, id, x, y)`) obsługuje tylko przedmioty z flagą `useable`, czyli mikstury, zwoje i książki.
 
+### Zasięg, w jakim widać jednostki
+
+Jednostki istnieją dla klienta dopiero wtedy, gdy gra wczyta pokój, w którym stoją, więc mod nie zobaczy potwora dalej niż sama gra. Pomiar na Krwawym Wrzosowisku (84 pokoje, wszystkie z kolizją): załadowane jednostki typu potwór sięgały do 112 podpól, czyli około 22 kafli, podczas gdy dźwięki otoczenia mają promień 12 kafli. Tracker i dźwięki korzystają z tej samej funkcji `CollectLiveTargets`, która obchodzi wszystkie pokoje poziomu bez żadnego limitu odległości — nie ma tu czego zwiększać.
+
+Presety z mapy nie zastąpią żywych jednostek: na tym samym poziomie `LevelMap` znalazł 502 presety obiektów, 1 kafel przejścia i tylko 2 presety potworów, bo zwykłe potwory są losowane przy wczytywaniu pokoju. Dlatego zamiast dalszego „radaru” mod sam zapowiada potwory, gdy pojawią się w zasięgu gry.
+
 ### Wybór umiejętności
 
 Lista umiejętności postaci zaczyna się w `Unit+0xA8`: `+0x04` to pierwszy wpis, `+0x08` umiejętność w lewej ręce, a `+0x0C` w prawej (ustawiają je `0x641570` i `0x641600`). Wpis umiejętności ma `+0x00` wskaźnik na rekord `skills.txt`, `+0x04` następny wpis, `+0x28` wydane punkty i `+0x34` powiązany przedmiot. Identyfikator umiejętności to słowo na początku rekordu `skills.txt`, a słowo na `+0x04` trzyma flagi — gdy ustawiony jest bit `0x10`, gra nie pozwala wziąć umiejętności do ręki (tak sprawdza to `0x499B30`).

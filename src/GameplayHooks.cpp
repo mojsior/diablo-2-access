@@ -235,8 +235,15 @@ constexpr int ItemTypeWeapon = 45;
 constexpr int ItemTypeArmor = 50;
 constexpr int UiInventoryPanel = 1;
 constexpr int DropAnnounceDistance = 20;
+// Monsters only exist for the client once their room loads, so the tracker
+// cannot look further than the game does. Measured in the Blood Moor, loaded
+// monsters reach about 112 subtiles (22 tiles), well past the 12 tiles the
+// sound cues cover, so the mod names them across that whole range instead of
+// waiting for the player to press Page Down. In subtiles, 5 per tile.
+constexpr int MonsterAnnounceDistance = 120;
+constexpr int MaxAnnouncedMonsters = 3;
 constexpr int PresetLiveMatchDistance = 5;
-constexpr const wchar_t *GameplayVersion = L"1.2 beta";
+constexpr const wchar_t *GameplayVersion = L"1.3 beta";
 
 constexpr int NpcMenuOffset_SelectedIndex = 0x44;
 constexpr int NpcMenuOffset_SelectableCount = 0x4C;
@@ -637,6 +644,7 @@ ManualMoveState g_manual;
 std::vector<UsedObject> g_usedObjects;
 std::unordered_set<std::uint32_t> g_knownGroundItems;
 bool g_groundItemsSeeded = false;
+std::unordered_set<std::uint32_t> g_knownMonsters;
 DWORD64 g_lastLiveRefresh = 0;
 DWORD64 g_lastCueTick = 0;
 std::uint64_t g_lastInteractCueKey = 0;
@@ -2359,6 +2367,44 @@ void UpdateCues(const game::UnitInfo &player)
         g_groundItemsSeeded = true;
         if (!dropped.empty())
             Say(TrS(L"Na ziemi: ", L"On the ground: ") + dropped + L".", false);
+
+        // Monsters come into the game's reach without warning, and pressing Page
+        // Down to notice them is a poor way to be told. Name the first few and
+        // count the rest.
+        std::unordered_set<std::uint32_t> monsters;
+        std::wstring appeared;
+        int appearedCount = 0;
+        for (const Target &target : live)
+        {
+            if (target.category != Category::Monsters)
+                continue;
+            monsters.insert(target.unitId);
+            // Unlike ground items, monsters that already stand there when the
+            // level loads are worth naming too, so there is no quiet first pass.
+            if (g_knownMonsters.contains(target.unitId) || target.distance > MonsterAnnounceDistance)
+                continue;
+
+            ++appearedCount;
+            if (appearedCount > MaxAnnouncedMonsters)
+                continue;
+            std::wstring name = NormalizeUiText(game::UnitName(target.unit));
+            if (name.empty() || ContainsInsensitive(name, L"not used"))
+                name = Tr(L"Potwór", L"Monster");
+            if (!appeared.empty())
+                appeared += L", ";
+            appeared += name;
+        }
+        g_knownMonsters = std::move(monsters);
+        if (!appeared.empty())
+        {
+            std::wstring text = TrS(L"Potwory: ", L"Monsters: ") + appeared;
+            if (appearedCount > MaxAnnouncedMonsters)
+                text += TrS(L" i jeszcze ", L" and ") + std::to_wstring(appearedCount - MaxAnnouncedMonsters) +
+                        Tr(L".", L" more.");
+            else
+                text += L".";
+            Say(text, false);
+        }
     }
 
     UpdateProximityAudio(player, live);
@@ -2426,6 +2472,7 @@ void ResetGameplayState()
     g_usedObjects.clear();
     g_knownGroundItems.clear();
     g_groundItemsSeeded = false;
+    g_knownMonsters.clear();
     g_lastLiveRefresh = 0;
     g_lastCueTick = 0;
     g_lastInteractCueKey = 0;
@@ -2452,6 +2499,7 @@ void OnLevelChanged()
     g_usedObjects.clear();
     g_knownGroundItems.clear();
     g_groundItemsSeeded = false;
+    g_knownMonsters.clear();
     g_lastInteractCueKey = 0;
 
     std::wstringstream log;
