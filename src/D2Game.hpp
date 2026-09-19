@@ -329,6 +329,22 @@ bool ItemBodyLocations(uintptr_t item, int &primary, int &secondary);
 // UI panel flags (D2CLIENT UI vars at 0x798E00).
 bool IsUiPanelOpen(int index);
 
+// One row of the key binding table the game loaded from default.key (0x79D5D0,
+// 114 rows of 10 bytes: +0 action id, +4 key code, +6 column).
+struct KeyBindingRow {
+    int index = -1;
+    std::int32_t action = -1;
+    std::int32_t column = -1;
+};
+
+// Unbinds every row that uses this virtual key code and returns the rows it
+// cleared, so they can be put back. The file on disk is not touched, so the
+// binding returns the next time the game runs without the mod. Enter is action 5
+// ("Chat"), whose text line the mod cannot read.
+std::vector<KeyBindingRow> ClearKeyBinding(std::uint16_t keyCode);
+// Writes a key code back into one row, by the index ClearKeyBinding returned.
+bool SetKeyBinding(int rowIndex, std::uint16_t keyCode);
+
 // Top-level window of the game process.
 HWND GameWindow();
 // Game mouse position (0x79D0F0 / 0x79D0EC), in game screen coordinates.
@@ -337,6 +353,21 @@ bool ReadGameMouse(std::int32_t &x, std::int32_t &y);
 // panels (e.g. the hovered inventory item, 0x475100) only in its mouse-move
 // handler, so writing the position alone is not enough.
 bool PostGameMouseMove(std::int32_t x, std::int32_t y);
+// Posts one half of a click for a point in game screen coordinates. The press
+// and the release belong in different frames, because the game samples the
+// button once per frame. A left click is what identifies, repairs, sockets or
+// personalizes the item under the cursor, a right click is what uses it.
+bool PostGameMouseButton(std::int32_t x, std::int32_t y, bool rightButton, bool down);
+// Real cursor position in screen coordinates, so the click can put it back.
+bool ReadRealCursor(std::int32_t &x, std::int32_t &y);
+bool MoveRealCursor(std::int32_t x, std::int32_t y);
+
+// True while the game waits for the player to point at an item, after a scroll
+// of identify, a repair, a gem or a personalization: the cursor image (0x79D11C)
+// is then the crosshair instead of one of the ordinary pointers.
+bool IsPointingMode();
+// Raw cursor image id, for logging.
+int CursorImage();
 
 bool SendPickItemFromStorage(std::uint32_t itemId);
 bool SendPlaceItemInStorage(std::uint32_t itemId, int x, int y, int page);

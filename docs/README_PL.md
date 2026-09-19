@@ -195,6 +195,14 @@ Dłuższa droga, w której sam wybierasz miejsce:
 
 Gdy postać nie spełnia wymagań przedmiotu, gra go nie założy i mod powie „Nie można tego zrobić.”.
 
+### Identyfikowanie zwojem
+
+1. W plecaku wybierz zwój identyfikacji i naciśnij Shift + Enter.
+2. Mod powie „Wybierz przedmiot. Strzałki zmieniają pole, Enter zatwierdza, Escape anuluje.”. Gra czeka teraz na wskazanie przedmiotu.
+3. Strzałkami wybierz nierozpoznany przedmiot i naciśnij Enter. Mod przeczyta jego nazwę już po identyfikacji, a Spacja poda pełny opis z właściwościami magicznymi.
+
+Control + Enter zawsze klika w wybrane pole tak, jak zrobiłaby to mysz, niezależnie od tego, co mod rozpoznaje. Przydaje się przy naprawie u kowala, wstawianiu klejnotów i personalizacji.
+
 ## Drzewko umiejętności (T)
 
 Drzewko działa jak drzewo w programach Windows. Na górnym poziomie są trzy zakładki klasy, na przykład u barbarzyńcy: umiejętności bojowe, mistrzostwa bojowe i okrzyki bojowe. Każda zakładka rozwija się do swoich dziesięciu umiejętności.

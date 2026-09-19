@@ -1,9 +1,11 @@
 #include "D2Game.hpp"
 
 #include "Addresses.hpp"
+#include "Logging.hpp"
 
 #include <array>
 #include <cstring>
+#include <sstream>
 
 // CL_SendPacket (0x465C40) takes the packet in ebx and its length in edi.
 static uintptr_t g_d2SendPacketFn = 0;
@@ -473,6 +475,15 @@ constexpr uintptr_t VaExperienceTable = 0x97E850;
 constexpr uintptr_t VaUiVars = 0x798E00;
 constexpr int UiVarCount = 38;
 
+// Key bindings, the same records default.key holds: +0 action id, +4 key code
+// (0xFFFF when unbound), +6 column (1 primary, 0 secondary). Derived from the
+// assignment function 0x457190, which walks the table from 0x79D5D4 (the key
+// code of record 0) up to 0x79DA48.
+constexpr uintptr_t VaKeyBindings = 0x79D5D0;
+constexpr int KeyBindingStride = 10;
+constexpr int KeyBindingCount = 114;
+constexpr std::uint16_t KeyBindingNone = 0xFFFF;
+
 int SehStat(uintptr_t fn, uintptr_t target, int statId, int layer = 0)
 {
     __try
@@ -648,6 +659,34 @@ bool IsUiPanelOpen(int index)
     if (index < 0 || index >= UiVarCount)
         return false;
     return Read(Absolute(VaUiVars) + static_cast<uintptr_t>(index) * 4, value) && value != 0;
+}
+
+std::vector<KeyBindingRow> ClearKeyBinding(std::uint16_t keyCode)
+{
+    std::vector<KeyBindingRow> cleared;
+    for (int i = 0; i < KeyBindingCount; ++i)
+    {
+        const uintptr_t record = Absolute(VaKeyBindings) + static_cast<uintptr_t>(i) * KeyBindingStride;
+        std::uint16_t bound = 0;
+        if (!Read(record + 4, bound) || bound != keyCode)
+            continue;
+        KeyBindingRow row;
+        row.index = i;
+        Read(record, row.action);
+        Read(record + 6, row.column);
+        if (!Write<std::uint16_t>(record + 4, KeyBindingNone))
+            continue;
+        cleared.push_back(row);
+    }
+    return cleared;
+}
+
+bool SetKeyBinding(int rowIndex, std::uint16_t keyCode)
+{
+    if (rowIndex < 0 || rowIndex >= KeyBindingCount)
+        return false;
+    const uintptr_t record = Absolute(VaKeyBindings) + static_cast<uintptr_t>(rowIndex) * KeyBindingStride;
+    return Write<std::uint16_t>(record + 4, keyCode);
 }
 
 bool SendPickItemFromStorage(std::uint32_t itemId)
@@ -925,6 +964,12 @@ constexpr uintptr_t VaMouseX = 0x79D0F0;
 constexpr uintptr_t VaMouseY = 0x79D0EC;
 constexpr uintptr_t VaScreenWidth = 0x70CD40;
 constexpr uintptr_t VaScreenHeight = 0x70CD44;
+// Cursor image the game draws (0x79D11C), indexed into the frame table at
+// 0x79D100 by 0x4559B0. 3 and 5 are the ordinary pointers, 4 is the pressed
+// one, and 6 is the crosshair the game shows while it waits for the player to
+// point at an item (identify, repair, socket, personalize).
+constexpr uintptr_t VaCursorImage = 0x79D11C;
+constexpr int CursorImagePointing = 6;
 
 BOOL CALLBACK FindGameWindowProc(HWND window, LPARAM result)
 {
@@ -950,11 +995,15 @@ bool ReadGameMouse(std::int32_t &x, std::int32_t &y)
     return Read(Absolute(VaMouseX), x) && Read(Absolute(VaMouseY), y);
 }
 
-bool PostGameMouseMove(std::int32_t x, std::int32_t y)
+namespace {
+
+// Game screen coordinates to client coordinates, for the window messages the
+// game hit-tests with.
+HWND ScaleToClient(std::int32_t &x, std::int32_t &y)
 {
     const HWND window = GameWindow();
     if (window == nullptr)
-        return false;
+        return nullptr;
 
     std::int32_t width = 0;
     std::int32_t height = 0;
@@ -970,7 +1019,70 @@ bool PostGameMouseMove(std::int32_t x, std::int32_t y)
             y = y * clientHeight / height;
         }
     }
+    return window;
+}
+
+} // namespace
+
+bool PostGameMouseMove(std::int32_t x, std::int32_t y)
+{
+    const HWND window = ScaleToClient(x, y);
+    if (window == nullptr)
+        return false;
     return PostMessageW(window, WM_MOUSEMOVE, 0, MAKELPARAM(x, y)) != FALSE;
+}
+
+bool PostGameMouseButton(std::int32_t x, std::int32_t y, bool rightButton, bool down)
+{
+    // Posted WM_*BUTTONDOWN messages only drive the cursor animation; the panels
+    // read the real input, so the button has to be injected for real.
+    const HWND window = ScaleToClient(x, y);
+    if (window == nullptr)
+        return false;
+    POINT point{static_cast<LONG>(x), static_cast<LONG>(y)};
+    if (!ClientToScreen(window, &point))
+        return false;
+    SetCursorPos(point.x, point.y);
+
+    INPUT input{};
+    input.type = INPUT_MOUSE;
+    if (rightButton)
+        input.mi.dwFlags = down ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP;
+    else
+        input.mi.dwFlags = down ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP;
+    const UINT sent = SendInput(1, &input, sizeof(input));
+    std::wstringstream log;
+    log << L"Mouse button " << (rightButton ? L"right" : L"left") << (down ? L" down" : L" up") << L" at screen "
+        << point.x << L", " << point.y << L": sent " << sent << L", error " << GetLastError();
+    LogLine(log.str());
+    return sent == 1;
+}
+
+bool ReadRealCursor(std::int32_t &x, std::int32_t &y)
+{
+    POINT point{};
+    if (!GetCursorPos(&point))
+        return false;
+    x = point.x;
+    y = point.y;
+    return true;
+}
+
+bool MoveRealCursor(std::int32_t x, std::int32_t y)
+{
+    return SetCursorPos(x, y) != FALSE;
+}
+
+int CursorImage()
+{
+    std::int32_t image = 0;
+    Read(Absolute(VaCursorImage), image);
+    return image;
+}
+
+bool IsPointingMode()
+{
+    return CursorImage() == CursorImagePointing;
 }
 
 bool WriteBytes(uintptr_t address, const void *data, size_t size)

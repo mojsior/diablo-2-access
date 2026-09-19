@@ -195,6 +195,14 @@ The long way, which lets you choose the slot:
 
 If the character does not meet the item's requirements, the game does not equip it and the mod says "Cannot do that.".
 
+### Identifying with a scroll
+
+1. In the backpack, select a scroll of identify and press Shift + Enter.
+2. The mod says "Choose an item. The arrows move, Enter confirms, Escape cancels.". The game is now waiting for a target.
+3. Choose the unidentified item with the arrows and press Enter. The mod reads its name once it is identified, and Space gives the full description with its magic properties.
+
+Control + Enter always clicks the chosen slot the way a mouse would, whatever the mod recognises. It is useful for repairing at the blacksmith, socketing gems and personalizing.
+
 ## Skill tree (T)
 
 The skill tree works like a tree view in Windows programs. The top level has the three class tabs, for example for the Barbarian: combat skills, combat masteries and warcries. Each tab expands into its ten skills.

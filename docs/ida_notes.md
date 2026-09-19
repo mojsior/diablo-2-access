@@ -237,3 +237,26 @@ Item path:  +0C x (grid column / belt slot), +10 y (grid row)
 - `0x06` - lewa umiejętność na jednostkę (atak)
 - `0x13` - interakcja z jednostką (obiekt, NPC, kafel przejścia)
 - `0x16` - podniesienie przedmiotu (typ, id, akcja)
+
+### Przypisania klawiszy (tablica w pamięci)
+
+- `0x79D5D0` - tablica przypisań, 114 rekordów po 10 bajtów, koniec `0x79DA48`.
+  Rekord: `+0` id akcji (dword), `+4` kod klawisza (word, `0xFFFF` = nieprzypisany), `+6` kolumna (dword, 1 = główna, 0 = zapasowa).
+  Wyprowadzone z `0x457190` (zapis przypisania), potwierdzone bajtami `default.key` (nagłówek 6 bajtów + te same rekordy).
+- Akcje istotne dla moda: **5 = Rozmowa (Enter, kolumna 1)**, 38 = Wyczyść ekran (spacja), 56 = Escape.
+- Mod czyści przypisanie Entera przy wejściu do gry (`game::ClearKeyBinding`), bo otwarta linijka czatu jest dla moda niewidoczna i zjada pierwsze Escape.
+  Zmiana jest tylko w pamięci; `default.key` na dysku zostaje nietknięty. Na czas ekranu „Konfiguracja sterowania” przypisanie wraca, bo gra zapisuje stamtąd `default.key`.
+- Zapis przypisania: `0x457190(id akcji, kolumna, kod klawisza, &id komunikatu)`, zatwierdzenie `0x494110(stdcall(zapisz))`.
+
+### Kursor i tryb wskazywania przedmiotu
+
+- `0x79D11C` - numer obrazka kursora, indeks do tablicy klatek `0x79D100` (rysuje `0x4559B0`, zakres 0..6).
+  Zmierzone: **3** i **5** to zwykłe wskaźniki, **4** wciśnięty, **6** celownik, który gra pokazuje, gdy czeka na wskazanie przedmiotu
+  (zwój identyfikacji, naprawa, gniazda, personalizacja). Mod używa tego jako `game::IsPointingMode()`.
+- `0x7B3230` to **nie** jest ten stan - to automat panelu ekwipunku (`0x474880` przyjmuje `{0,1,2,11,12,14,19}` jako „zwykły klik”);
+  przy identyfikacji zwojem pozostaje 0, więc nie nadaje się do wykrywania trybu.
+- Klikanie z moda: pakiet `0x20` (użyj przedmiotu) **nie** wprowadza gry w tryb celowania - zwój identyfikacji nie reaguje na niego wcale.
+  Nie działają też `WM_RBUTTONDOWN`/`WM_LBUTTONDOWN` wysłane przez `PostMessage` - gra bierze z nich tylko animację kursora.
+  Działa dopiero prawdziwe zdarzenie myszy: `SetCursorPos` + `SendInput`, z wciśnięciem i puszczeniem w **osobnych klatkach**
+  (gra próbkuje przycisk raz na klatkę), po uprzednim najechaniu i potwierdzeniu, że `0x7B3234` wskazuje wybrany przedmiot.
+  Tak realizowane są `game::PostGameMouseButton` i `panels::StartSlotClick`.

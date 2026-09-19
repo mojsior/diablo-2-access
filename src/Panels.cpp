@@ -42,6 +42,8 @@ constexpr std::array<uintptr_t, 10> VaBodyRects = {
     0x7B32E8, 0x7B32D4, 0x7B32FC, 0x7B32AC, 0x7B32C0, 0x7B3310, 0x7B3324, 0x7B3338, 0x7B334C, 0x7B3360,
 };
 constexpr DWORD64 DescriptionTimeoutMs = 800;
+// How long the mouse button stays down, so the game samples it as pressed.
+constexpr DWORD64 ClickHoldMs = 120;
 
 enum class Focus : std::uint8_t {
     None,
@@ -99,6 +101,15 @@ constexpr std::array<EquipmentSlot, 10> EquipmentSlots = {
     EquipmentSlot{game::bodyloc::Gloves, L"Rękawice", L"Gloves"},
 };
 
+// A click on a slot runs over several frames: the game has to hit-test the new
+// mouse position first, and it samples the button between frames, so pressing
+// and releasing in one frame is lost.
+enum class ClickPhase : std::uint8_t {
+    None,
+    Hovering, // waiting for the game to notice the mouse over the slot
+    Pressed,  // button down sent, waiting before the release
+};
+
 enum class ItemAction : std::uint8_t {
     None,
     Move,
@@ -142,6 +153,17 @@ struct State {
     DWORD64 describeTick = 0;
     std::int32_t savedMouseX = 0;
     std::int32_t savedMouseY = 0;
+
+    // Clicking a slot for the game itself: identify, repair, socket, personalize.
+    bool pointing = false;
+    ClickPhase clickPhase = ClickPhase::None;
+    bool clickRight = false;
+    uintptr_t clickItem = 0;
+    std::int32_t clickX = 0;
+    std::int32_t clickY = 0;
+    std::int32_t savedCursorX = 0;
+    std::int32_t savedCursorY = 0;
+    DWORD64 clickTick = 0;
 };
 
 State g_state;
@@ -601,6 +623,8 @@ std::uint32_t ItemId(uintptr_t item)
     return id;
 }
 
+void StartSlotClick(uintptr_t player, bool rightButton = false);
+
 void StartItemAction(ItemAction action, uintptr_t cursorItem, uintptr_t usedItem)
 {
     g_state.itemAction = action;
@@ -613,6 +637,15 @@ void StartItemAction(ItemAction action, uintptr_t cursorItem, uintptr_t usedItem
 void InventoryActivate(uintptr_t player, game::Point playerPosition, bool use)
 {
     const uintptr_t inventory = game::UnitInventory(player);
+    // While the game waits for a target it expects a click on the item, not the
+    // panel's own packets - those would pick the item up instead. A held item
+    // means an ordinary move, whatever the cursor state says.
+    if (game::IsPointingMode() && game::InventoryCursorItem(inventory) == 0)
+    {
+        StartSlotClick(player);
+        return;
+    }
+
     const uintptr_t cursor = game::InventoryCursorItem(inventory);
     const std::uint32_t cursorId = ItemId(cursor);
     GridView grid;
@@ -660,6 +693,14 @@ void InventoryActivate(uintptr_t player, game::Point playerPosition, bool use)
                 g_state.equipRow = g_state.gridRow;
                 game::SendPickItemFromStorage(ItemId(item));
                 StartItemAction(ItemAction::EquipPick, cursor, item);
+                return;
+            }
+            // Potions and scrolls are used the way a sighted player uses them,
+            // with a real right click on the slot: the use packet alone never
+            // puts the game into the pointing mode a scroll of identify needs.
+            if (game::ItemIsType(item, 9) || game::ItemIsType(item, 22))
+            {
+                StartSlotClick(player, true);
                 return;
             }
             game::SendUseStorageItem(ItemId(item), playerPosition);
@@ -807,6 +848,12 @@ void ProcessItemAction(uintptr_t player)
             g_state.itemAction = ItemAction::None;
             PlayCue(CueId::Item);
             Say(TrS(L"Użyto: ", L"Used: ") + g_state.usedItemName + L".");
+        }
+        else if (game::IsPointingMode())
+        {
+            // A scroll of identify is only spent once a target is picked, so the
+            // pointing mode takes over instead of the timeout complaining.
+            g_state.itemAction = ItemAction::None;
         }
         else if (timedOut)
         {
@@ -1013,6 +1060,118 @@ void ProcessDescription(bool inventoryOpen)
     }
 }
 
+// A scroll of identify, a repair, a gem or a personalization leaves the game
+// waiting for the player to click an item. Its own handler does the work, so the
+// mod points the mouse at the slot and clicks it, the same way it reads the
+// description.
+void StartSlotClick(uintptr_t player, bool rightButton)
+{
+    FinishDescription();
+
+    uintptr_t item = 0;
+    std::int32_t x = 0;
+    std::int32_t y = 0;
+    const bool located = SelectedSlotScreenPoint(player, item, x, y);
+    if (item == 0)
+    {
+        Say(Tr(L"Pusto.", L"Empty."));
+        return;
+    }
+    if (!located)
+    {
+        Say(Tr(L"Ten przedmiot trzeba wybrać w plecaku.", L"Choose that item in the backpack."));
+        return;
+    }
+
+    game::ReadGameMouse(g_state.savedMouseX, g_state.savedMouseY);
+    game::ReadRealCursor(g_state.savedCursorX, g_state.savedCursorY);
+    if (!game::PostGameMouseMove(x, y))
+    {
+        Say(Tr(L"Nie można tego zrobić.", L"Cannot do that."));
+        return;
+    }
+    g_state.clickPhase = ClickPhase::Hovering;
+    g_state.clickRight = rightButton;
+    g_state.clickItem = item;
+    g_state.clickX = x;
+    g_state.clickY = y;
+    g_state.clickTick = GetTickCount64();
+    LogLine(L"Panels: clicking slot at screen " + std::to_wstring(x) + L", " + std::to_wstring(y) +
+            (rightButton ? L" with the right button" : L" with the left button") + L", cursor image " +
+            std::to_wstring(game::CursorImage()));
+}
+
+void ProcessSlotClick(bool inventoryOpen)
+{
+    if (g_state.clickPhase == ClickPhase::None)
+        return;
+    if (!inventoryOpen)
+    {
+        g_state.clickPhase = ClickPhase::None;
+        return;
+    }
+
+    if (g_state.clickPhase == ClickPhase::Pressed)
+    {
+        if (GetTickCount64() - g_state.clickTick < ClickHoldMs)
+            return;
+        g_state.clickPhase = ClickPhase::None;
+        game::PostGameMouseButton(g_state.clickX, g_state.clickY, g_state.clickRight, false);
+        game::MoveRealCursor(g_state.savedCursorX, g_state.savedCursorY);
+        game::PostGameMouseMove(g_state.savedMouseX, g_state.savedMouseY);
+        return;
+    }
+
+    // The click only lands on the right item once the game has hit-tested the
+    // new mouse position.
+    const uintptr_t hovered = game::ReadPtr(game::Absolute(VaHoveredItem));
+    if (hovered == g_state.clickItem)
+    {
+        if (!game::PostGameMouseButton(g_state.clickX, g_state.clickY, g_state.clickRight, true))
+        {
+            g_state.clickPhase = ClickPhase::None;
+            Say(Tr(L"Nie można tego zrobić.", L"Cannot do that."));
+            return;
+        }
+        g_state.clickPhase = ClickPhase::Pressed;
+        g_state.clickTick = GetTickCount64();
+        return;
+    }
+    if (GetTickCount64() - g_state.clickTick > DescriptionTimeoutMs)
+    {
+        g_state.clickPhase = ClickPhase::None;
+        g_state.clickItem = 0;
+        game::PostGameMouseMove(g_state.savedMouseX, g_state.savedMouseY);
+        LogLine(L"Panels: slot click timed out, hovered item " + std::to_wstring(hovered));
+        Say(Tr(L"Nie można tego zrobić.", L"Cannot do that."));
+    }
+}
+
+// Announces the pointing mode when it starts and reads the item out again when
+// it ends, which is where the identified name appears.
+void UpdatePointingMode()
+{
+    const bool pointing = game::IsPointingMode();
+    if (pointing == g_state.pointing)
+        return;
+    g_state.pointing = pointing;
+
+    if (pointing)
+    {
+        LogLine(L"Panels: pointing mode, cursor image " + std::to_wstring(game::CursorImage()));
+        g_state.clickItem = 0;
+        Say(Tr(L"Wybierz przedmiot. Strzałki zmieniają pole, Enter zatwierdza, Escape anuluje.",
+               L"Choose an item. The arrows move, Enter confirms, Escape cancels."));
+        return;
+    }
+    // The mode ended, which is where the identified name appears.
+    if (g_state.clickItem != 0)
+    {
+        Say(ItemLabel(g_state.clickItem));
+        g_state.clickItem = 0;
+    }
+}
+
 bool KeyToDirection(DWORD virtualKey, int &dx, int &dy)
 {
     dx = 0;
@@ -1081,6 +1240,8 @@ void UpdatePanels(uintptr_t playerUnit, game::Point playerPosition)
     ProcessStatQueue(playerUnit);
     ProcessItemAction(playerUnit);
     ProcessDescription(inventoryOpen);
+    ProcessSlotClick(inventoryOpen);
+    UpdatePointingMode();
 }
 
 bool IsAnyPanelFocused()
@@ -1156,7 +1317,13 @@ bool HandlePanelKey(uintptr_t playerUnit, game::Point playerPosition, const Pane
     }
     if (activate)
     {
-        InventoryActivate(playerUnit, playerPosition, key.shift);
+        // Control+Enter is the plain left click a sighted player would do, for
+        // everything the panel does not model itself: identifying with a scroll,
+        // repairing, socketing, personalizing.
+        if (key.ctrl)
+            StartSlotClick(playerUnit, false);
+        else
+            InventoryActivate(playerUnit, playerPosition, key.shift);
         return true;
     }
     return false;

@@ -247,7 +247,7 @@ constexpr int MaxAnnouncedMonsters = 3;
 constexpr int ExplorationMarkRadiusTiles = 6;
 constexpr DWORD64 ExplorationMarkIntervalMs = 250;
 constexpr int PresetLiveMatchDistance = 5;
-constexpr const wchar_t *GameplayVersion = L"1.4 beta";
+constexpr const wchar_t *GameplayVersion = L"1.5 beta";
 
 constexpr int NpcMenuOffset_SelectedIndex = 0x44;
 constexpr int NpcMenuOffset_SelectableCount = 0x4C;
@@ -784,6 +784,9 @@ bool ReadNpcMenuSnapshot(NpcMenuSnapshot &snapshot)
 }
 
 std::atomic<bool> g_npcMenuOpenForKeys = false;
+// The game's own dialog box, cached for the keyboard hook thread, which must not
+// walk the game's pointers itself.
+std::atomic<bool> g_nativeDialogOpenForKeys = false;
 
 // Moves the highlight to the previous or next choosable entry. The next poll
 // reads the new entry out.
@@ -855,6 +858,8 @@ bool ActivateNpcMenuSelection()
 }
 
 // The NPC menu only reacts to the mouse, so the mod drives it from the keyboard.
+// Every arrow is swallowed, including the ones the menu has no use for and the
+// ones that hit the end of the list, so none of them walks the character.
 bool HandleNpcMenuKey(DWORD virtualKey)
 {
     if (!g_npcMenuOpenForKeys.load())
@@ -864,10 +869,22 @@ bool HandleNpcMenuKey(DWORD virtualKey)
     {
     case VK_UP:
     case VK_NUMPAD8:
-        return MoveNpcMenuSelection(-1);
+    case VK_NUMPAD7:
+    case VK_NUMPAD9:
+        MoveNpcMenuSelection(-1);
+        return true;
     case VK_DOWN:
     case VK_NUMPAD2:
-        return MoveNpcMenuSelection(1);
+    case VK_NUMPAD1:
+    case VK_NUMPAD3:
+        MoveNpcMenuSelection(1);
+        return true;
+    case VK_LEFT:
+    case VK_NUMPAD4:
+    case VK_RIGHT:
+    case VK_NUMPAD6:
+        // The menu is a single list, so sideways arrows only get eaten.
+        return true;
     case VK_RETURN:
         return ActivateNpcMenuSelection();
     default:
@@ -882,6 +899,16 @@ bool IsGameplayDialogActiveInternal()
         return true;
     int dialogActive = 0;
     return ReadGlobalInt(va::Global_DialogActive, dialogActive) && dialogActive != 0;
+}
+
+// Every menu and panel the mod steers with the keyboard. While one of them is up
+// the arrows belong to it, so a key it did not use must not reach the movement
+// code. Reads cached flags only, so the keyboard hook thread may call it.
+bool IsAnyAccessibleUiOpen()
+{
+    return panels::IsPanelOpenForKeys() || skilltree::IsSkillTreeOpenForKeys() ||
+           gamemenu::IsGameMenuOpenForKeys() || questlog::IsQuestLogOpenForKeys() ||
+           controls::IsControlsScreenOpenForKeys() || g_npcMenuOpenForKeys.load();
 }
 
 void PollNpcDialogAccessibility()
@@ -930,9 +957,9 @@ void PollNpcDialogAccessibility()
     int dialogActive = 0;
     const bool dialogOpen = ReadGlobalInt(va::Global_DialogActive, dialogActive) && dialogActive != 0 &&
                             g_lastNpcMenu == 0;
+    g_nativeDialogOpenForKeys = dialogOpen;
     if (dialogOpen && !g_dialogWasOpen)
-        Say(Tr(L"Okno dialogowe otwarte. Enter przechodzi dalej lub aktywuje wybór, Escape zamyka.",
-               L"Dialog open. Enter continues or activates the choice, Escape closes."));
+        Say(Tr(L"Okno dialogowe otwarte. Escape zamyka.", L"Dialog open. Escape closes."));
     g_dialogWasOpen = dialogOpen;
 }
 
@@ -2050,6 +2077,9 @@ void SpeakHelp()
            L"zakłada, albo rozdaje wszystkie punkty, "
            L"Spacja czyta opis przedmiotu. Aby założyć przedmiot, podnieś go Enterem, przejdź strzałką w górę do "
            L"założonych przedmiotów, wybierz miejsce i naciśnij Enter. "
+           L"Po użyciu zwoju identyfikacji gra czeka na wskazanie przedmiotu: wybierz go strzałkami i naciśnij "
+           L"Enter. Control plus Enter zawsze klika w wybrane pole, tak jak zrobiłaby to mysz, więc działa też "
+           L"przy naprawie, gniazdach i personalizacji. "
            L"Tab przełącza między kartą a ekwipunkiem. "
            L"T otwiera drzewko umiejętności: strzałki w górę i w dół przechodzą po drzewku, w prawo rozwija zakładkę, "
            L"w lewo zwija, Enter dodaje punkt umiejętności, Spacja czyta opis. "
@@ -2074,6 +2104,9 @@ void SpeakHelp()
            L"spends all points, "
            L"Space reads the item description. To equip an item, pick it up with Enter, go up to the equipped "
            L"items, choose the slot and press Enter. "
+           L"After a scroll of identify the game waits for a target: choose the item with the arrows and press "
+           L"Enter. Control plus Enter always clicks the chosen slot the way a mouse would, so it also works for "
+           L"repairing, socketing and personalizing. "
            L"Tab switches between the sheet and the inventory. "
            L"T opens the skill tree: up and down arrows move through the tree, right expands a tab, left collapses "
            L"it, Enter adds a skill point, Space reads the description. "
@@ -2191,7 +2224,8 @@ bool KeyDirection(DWORD virtualKey, int &dx, int &dy)
 
 void UpdateManualMovement(const game::UnitInfo &player)
 {
-    if (panels::IsAnyPanelFocused() || skilltree::IsSkillTreeFocused() || gamemenu::IsGameMenuOpen())
+    // A held arrow must stop walking the character the moment any menu opens.
+    if (IsAnyAccessibleUiOpen())
     {
         g_manual = ManualMoveState{};
         return;
@@ -2646,12 +2680,58 @@ void ResetGameplayState()
     g_lastNpcMenuSelected = -2;
     g_lastNpcMenuLabel.clear();
     g_dialogWasOpen = false;
+    g_npcMenuOpenForKeys = false;
+    g_nativeDialogOpenForKeys = false;
     {
         std::scoped_lock lock(g_keyMutex);
         g_keyQueue.clear();
     }
     for (auto &held : g_keyHeld)
         held = false;
+}
+
+// Enter is bound to "Chat" in default.key, and the chat line it opens is
+// invisible to the mod: it swallows the next Escape, so every menu then needs
+// two. The binding is dropped in memory only, so the file on disk and the game
+// without the mod keep it.
+std::vector<game::KeyBindingRow> g_clearedChatRows;
+
+void UnbindChatKey()
+{
+    if (!g_clearedChatRows.empty())
+        return;
+    g_clearedChatRows = game::ClearKeyBinding(VK_RETURN);
+    std::wstringstream log;
+    log << L"Enter key bindings cleared: " << g_clearedChatRows.size();
+    for (const game::KeyBindingRow &row : g_clearedChatRows)
+        log << L", action " << row.action << L" column " << row.column;
+    LogLine(log.str());
+}
+
+void RestoreChatKey()
+{
+    if (g_clearedChatRows.empty())
+        return;
+    for (const game::KeyBindingRow &row : g_clearedChatRows)
+        game::SetKeyBinding(row.index, VK_RETURN);
+    g_clearedChatRows.clear();
+    LogLine(L"Enter key bindings restored.");
+}
+
+// The controls screen writes the table back to default.key when it is closed
+// with the accept button, so the binding goes back while that screen is up and
+// the mod drops it again afterwards.
+void UpdateChatKeyBinding()
+{
+    static bool wasControlsOpen = false;
+    const bool controlsOpen = controls::IsControlsScreenOpenForKeys();
+    if (controlsOpen == wasControlsOpen)
+        return;
+    wasControlsOpen = controlsOpen;
+    if (controlsOpen)
+        RestoreChatKey();
+    else
+        UnbindChatKey();
 }
 
 void OnLevelChanged()
@@ -2703,6 +2783,10 @@ void ProcessKeyEvent(const game::UnitInfo &player, const KeyEvent &event)
     int dy = 0;
     if (KeyDirection(event.virtualKey, dx, dy))
     {
+        // A menu owns the arrows: one it did not use, or one that hit the end of
+        // a list, is swallowed instead of walking the character.
+        if (IsAnyAccessibleUiOpen())
+            return;
         StopAutoWalk();
         if (g_manual.taps.size() < ManualStepQueueLimit)
             g_manual.taps.push_back(Point{dx, dy});
@@ -2847,6 +2931,7 @@ void GameTick()
     RunPendingJobs();
     gamemenu::UpdateGameMenu();
     controls::UpdateControls();
+    UpdateChatKeyBinding();
     questlog::UpdateQuestLog();
     skilltree::UpdateSkillTree(player.unit);
     panels::UpdatePanels(player.unit, player.position);
@@ -2937,6 +3022,7 @@ void OnGameEntered()
         return;
 
     ResetGameplayState();
+    UnbindChatKey();
     PushEvent("game", L"entered");
     NotifyFrontendGameplayReady();
     std::wstringstream stream;
@@ -2952,6 +3038,9 @@ void OnGameLeft()
 {
     if (g_gameActive.exchange(false))
         PushEvent("game", L"left");
+    // The next game loads the bindings again, so the cleared rows are forgotten
+    // rather than written back into a table that no longer exists.
+    g_clearedChatRows.clear();
     ResetGameplayState();
 }
 
@@ -3350,9 +3439,7 @@ bool IsGameplayKeyCaptured(DWORD virtualKey)
     // Enter, Space, Tab and End stay with the game unless one of the accessible
     // panels or menus is open.
     if (virtualKey == VK_RETURN || virtualKey == VK_SPACE || virtualKey == VK_TAB || virtualKey == VK_END)
-        return g_gameActive.load() && (panels::IsPanelOpenForKeys() || skilltree::IsSkillTreeOpenForKeys() ||
-                                       gamemenu::IsGameMenuOpenForKeys() || questlog::IsQuestLogOpenForKeys() ||
-                                       controls::IsControlsScreenOpenForKeys() || IsNpcMenuOpenForKeys());
+        return g_gameActive.load() && (IsAnyAccessibleUiOpen() || g_nativeDialogOpenForKeys.load());
     return false;
 }
 
