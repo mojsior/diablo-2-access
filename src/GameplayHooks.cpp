@@ -247,7 +247,7 @@ constexpr int MaxAnnouncedMonsters = 3;
 constexpr int ExplorationMarkRadiusTiles = 6;
 constexpr DWORD64 ExplorationMarkIntervalMs = 250;
 constexpr int PresetLiveMatchDistance = 5;
-constexpr const wchar_t *GameplayVersion = L"1.5 beta";
+constexpr const wchar_t *GameplayVersion = L"1.6 beta";
 
 constexpr int NpcMenuOffset_SelectedIndex = 0x44;
 constexpr int NpcMenuOffset_SelectableCount = 0x4C;
