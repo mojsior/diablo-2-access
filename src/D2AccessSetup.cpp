@@ -43,7 +43,7 @@ namespace {
 constexpr DWORD LoopDelayMs = 250;
 constexpr ULONGLONG MainMenuSettleMs = 5000;
 constexpr ULONGLONG NoWindowExitMs = 20000;
-constexpr int NvdaClientResourceId = 101;
+constexpr int SpeechLibraryResourceId = 101;
 constexpr const wchar_t *ReleasesUrl = L"https://api.github.com/repos/mojsior/diablo-2-access/releases?per_page=10";
 constexpr const char *ReleaseAssetSuffix = "-windows.zip";
 
@@ -232,10 +232,10 @@ void BringToFront(HWND hwnd)
     Sleep(300);
 }
 
-// The single-file download carries the NVDA controller client as a resource.
-void ExtractEmbeddedNvdaClient()
+// The single-file download carries the Prism speech library as a resource.
+void ExtractEmbeddedSpeechLibrary()
 {
-    const HRSRC resource = FindResourceW(nullptr, MAKEINTRESOURCEW(NvdaClientResourceId), RT_RCDATA);
+    const HRSRC resource = FindResourceW(nullptr, MAKEINTRESOURCEW(SpeechLibraryResourceId), RT_RCDATA);
     if (resource == nullptr)
         return;
     const HGLOBAL loaded = LoadResource(nullptr, resource);
@@ -247,7 +247,7 @@ void ExtractEmbeddedNvdaClient()
     std::error_code error;
     const fs::path folder = fs::temp_directory_path(error) / L"D2AccessSetup";
     fs::create_directories(folder, error);
-    const fs::path target = folder / L"nvdaControllerClient32.dll";
+    const fs::path target = folder / L"prism32.dll";
     if (fs::exists(target, error) && fs::file_size(target, error) == size)
         return;
     std::ofstream file(target, std::ios::binary | std::ios::trunc);
@@ -937,7 +937,7 @@ int wmain(int argc, wchar_t **argv)
             pathArgument = arg;
     }
 
-    ExtractEmbeddedNvdaClient();
+    ExtractEmbeddedSpeechLibrary();
     InitializeLogging(L"D2AccessSetup.log");
     InitializeScreenReader();
     Sleep(300);

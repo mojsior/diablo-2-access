@@ -38,7 +38,7 @@ target_compile_definitions(D2AccessHook PRIVATE
     WIN32_LEAN_AND_MEAN
 )
 
-target_include_directories(D2AccessHook PRIVATE src third_party)
+target_include_directories(D2AccessHook PRIVATE src third_party third_party/prism)
 target_link_libraries(D2AccessHook PRIVATE winmm ole32 sapi shlwapi ws2_32)
 
 set_target_properties(D2AccessHook PROPERTIES
@@ -61,9 +61,9 @@ target_compile_definitions(D2AccessLauncher PRIVATE
 target_include_directories(D2AccessLauncher PRIVATE src)
 target_link_libraries(D2AccessLauncher PRIVATE shlwapi)
 
-# Accessible installer for classic Diablo II and the mod. The NVDA controller
-# client is embedded so the assistant can be downloaded as a single file.
-set(NVDA_CLIENT_DLL "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nvda/nvdaControllerClient32.dll")
+# Accessible installer for classic Diablo II and the mod. Prism is embedded so
+# the assistant can be downloaded as a single file and still speak.
+set(PRISM_DLL "${CMAKE_CURRENT_SOURCE_DIR}/third_party/prism/prism32.dll")
 configure_file(src/D2AccessSetup.rc.in "${CMAKE_CURRENT_BINARY_DIR}/D2AccessSetup.rc" @ONLY)
 
 add_executable(D2AccessSetup
@@ -86,7 +86,7 @@ target_compile_definitions(D2AccessSetup PRIVATE
     WIN32_LEAN_AND_MEAN
 )
 
-target_include_directories(D2AccessSetup PRIVATE src third_party)
+target_include_directories(D2AccessSetup PRIVATE src third_party third_party/prism)
 target_link_libraries(D2AccessSetup PRIVATE shlwapi ole32 sapi comdlg32 winhttp)
 
 add_custom_command(TARGET D2AccessHook POST_BUILD
@@ -96,10 +96,10 @@ add_custom_command(TARGET D2AccessHook POST_BUILD
             "$<TARGET_FILE_DIR:D2AccessHook>/audio"
 )
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nvda/nvdaControllerClient32.dll")
+if(EXISTS "${PRISM_DLL}")
     add_custom_command(TARGET D2AccessHook POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nvda/nvdaControllerClient32.dll"
-                "$<TARGET_FILE_DIR:D2AccessHook>/nvdaControllerClient32.dll"
+                "${PRISM_DLL}"
+                "$<TARGET_FILE_DIR:D2AccessHook>/prism32.dll"
     )
 endif()

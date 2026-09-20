@@ -1,8 +1,8 @@
 # Diablo 2 Access
 
-Mod dostępności do klasycznego Diablo II (Game.exe 1.14b) dla osób niewidomych i słabowidzących. Mowa idzie przez NVDA albo syntezator Windows. Mod czyta menu, postać, ekwipunek, drzewko umiejętności i otoczenie. Prowadzi też do celów i gra dźwięki zbliżeniowe tak jak [Diablo Access](https://github.com/mojsior/diablo-access).
+Mod dostępności do klasycznego Diablo II (Game.exe 1.14b) dla osób niewidomych i słabowidzących. Mowa idzie przez [Prism](https://github.com/ethindp/prism), czyli przez czytnik ekranu, którego używasz: NVDA, JAWS, ZoomText i inne, a gdy żaden nie działa, przez syntezator Windows. Mod czyta menu, postać, ekwipunek, drzewko umiejętności i otoczenie. Prowadzi też do celów i gra dźwięki zbliżeniowe tak jak [Diablo Access](https://github.com/mojsior/diablo-access).
 
-An accessibility mod for blind and low-vision players of classic Diablo II (Game.exe 1.14b). Speech goes through NVDA or the Windows speech synthesizer. The mod reads menus, the character, the inventory, the skill tree and the surroundings, guides you to targets and plays proximity sound cues like [Diablo Access](https://github.com/mojsior/diablo-access).
+An accessibility mod for blind and low-vision players of classic Diablo II (Game.exe 1.14b). Speech goes through [Prism](https://github.com/ethindp/prism), which means the screen reader you already use - NVDA, JAWS, ZoomText and others - or the Windows speech synthesizer when none is running. The mod reads menus, the character, the inventory, the skill tree and the surroundings, guides you to targets and plays proximity sound cues like [Diablo Access](https://github.com/mojsior/diablo-access).
 
 ## Dokumentacja / Documentation
 
@@ -14,7 +14,7 @@ An accessibility mod for blind and low-vision players of classic Diablo II (Game
 
 - Diablo II z dodatkiem Lord of Destruction w wersji 1.14b, domyślnie w `C:\Program Files (x86)\Diablo II`. Nie wybieraj w menu gry opcji BATTLE.NET: uruchamia ona aktualizator Blizzarda, który psuje pliki gry, a nowsza wersja nie działa z modem ([szczegóły](docs/README_PL.md#nie-aktualizuj-gry--mod-działa-z-wersją-114b)).
 - Windows 10 lub 11.
-- NVDA (opcjonalnie; bez NVDA mod mówi syntezatorem Windows).
+- Czytnik ekranu (opcjonalnie): NVDA, JAWS, ZoomText, SenseReader i inne. Bez czytnika mod mówi syntezatorem Windows.
 
 ## Instalacja
 
@@ -31,7 +31,7 @@ Paczka `diablo-2-access-…-windows.zip` z tego samego wydania zawiera pliki mod
 
 - Diablo II with Lord of Destruction, version 1.14b, by default in `C:\Program Files (x86)\Diablo II`. Do not choose BATTLE.NET in the game menu: it starts Blizzard's updater, which breaks the game files, and the newer version does not work with the mod ([details](docs/README_EN.md#keep-the-game-on-version-114b)).
 - Windows 10 or 11.
-- NVDA (optional; without NVDA the mod speaks with the Windows synthesizer).
+- A screen reader (optional): NVDA, JAWS, ZoomText, SenseReader and others. Without one the mod speaks with the Windows synthesizer.
 
 ## Installation
 
@@ -61,4 +61,4 @@ The output goes to `build\Release`. The logs `D2AccessLauncher.log` and `D2Acces
 
 - [Diablo Access](https://github.com/mojsior/diablo-access): klawisze, tracker, opis drogi i dźwięki zbliżeniowe oraz ich pliki / keys, tracker, path speech, proximity cues and their sound files.
 - [Pokemon Access](https://github.com/nuive/pokemon-access): pomysł na opis drogi w krokach / the step-based path description idea.
-- [nlohmann/json](https://github.com/nlohmann/json) (MIT) i NVDA Controller Client (LGPL 2.1).
+- [nlohmann/json](https://github.com/nlohmann/json) (MIT) i [Prism](https://github.com/ethindp/prism) (MPL 2.0).

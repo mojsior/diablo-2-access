@@ -2,7 +2,7 @@
 
 D2 Access is an accessibility mod for classic Diablo II (Game.exe version 1.14b) for blind and low-vision players. It reads menus, the character, the inventory, the skill tree and the surroundings aloud. It also guides you to chosen targets, like the Diablo Access mod for the first Diablo.
 
-Speech goes through NVDA. When NVDA is not running, the mod uses the Windows speech synthesizer (SAPI).
+Speech goes through the Prism library, which talks to whichever screen reader you use: NVDA, JAWS, ZoomText, SenseReader and others. When no screen reader is running, the mod speaks with the Windows synthesizer (SAPI or OneCore).
 
 ## Installing Diablo II
 
